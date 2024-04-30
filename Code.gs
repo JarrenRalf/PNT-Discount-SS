@@ -483,16 +483,27 @@ function updateAdagioBasePrice()
   const spreadsheet = SpreadsheetApp.getActive();
   spreadsheet.toast('Updating base price...')
   const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
-  const discountDataRange = discountDataSheet.getRange(2, 1, discountDataSheet.getLastRow() - 1, 12)
+  const discountDataRange = discountDataSheet.getRange(2, 1, discountDataSheet.getLastRow() - 1, 15)
   const discountData = discountDataRange.getValues()
   const ss = SpreadsheetApp.openById('1sLhSt5xXPP5y9-9-K8kq4kMfmTuf6a9_l9Ohy0r82gI');
   const adagioDataSheet = ss.getSheetByName('FromAdagio');
   const lastUpdated = ss.getSheetByName('Dashboard').getSheetValues(24, 11, 1, 1)[0][0]
   const adagioData = adagioDataSheet.getSheetValues(2, 17, adagioDataSheet.getLastRow() - 1, 2);
 
-  for (var i = 0; i < adagioData.length; i++)
+
+  for (var j = 0; j < discountData.length; j++)
   {
-    for (var j = 0; j < discountData.length; j++)
+    // If any of the disocunt values are blank, then replace them with zeros
+    if (discountData[j][12] === '')
+      discountData[j][12] = 0;
+
+    if (discountData[j][13] === '')
+      discountData[j][13] = 0;
+
+    if (discountData[j][14] === '')
+      discountData[j][14] = 0;
+
+    for (var i = 0; i < adagioData.length; i++)
     {
       if (adagioData[i][0].toString().toUpperCase().trim() == discountData[j][0].toString().toUpperCase().trim())
       {
