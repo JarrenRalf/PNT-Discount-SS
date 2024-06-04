@@ -302,7 +302,7 @@ function searchV2(e, spreadsheet, sheet)
 
       functionRunTimeRange.setValue((new Date().getTime() - startTime)/1000 + " seconds");
     }
-    else if (row != rowEnd && row > 3)
+    else if (row != rowEnd && row > 3) // Multiple lines are being pasted
     {
       const values = range.getValues().filter(blank => isNotBlank(blank[0]))
 
@@ -390,7 +390,7 @@ function searchV2(e, spreadsheet, sheet)
               .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(items).activate();
 
           if (numSkusFound > 0)
-            itemSearchFullRange.getRange(4, 1, numSkusFound, 9).activate()
+            itemSearchFullRange.offset(numSkusNotFound, 0, numSkusFound, 9).activate()
         }
         else // All SKUs were succefully found
         {
