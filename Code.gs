@@ -437,14 +437,14 @@ function searchV2(e, spreadsheet, sheet)
         {
           switch (col)
           {
-            case 4:
+            case 4: // Percentages Changed
             case 6:
             case 8:
               var newPercentage = range.getValue();
               discountDataSheet.getRange(itemIndex + 2, col/2 + 11).setNumberFormat('@').setValue(newPercentage.toString());
-              range.setNumberFormat('@').setValue(newPercentage + '%')
+              range.offset(0, 0, 1, 2).setNumberFormats([['@', '$0.00']]).setValues([[newPercentage.toString() + '%', Number(range.offset(0, 3 - col).getValue())*(100 - newPercentage)/100]])
               break;
-            case 5:
+            case 5: // Price Changed
             case 7:
             case 9:
               const newPrice = range.getValue();
@@ -467,7 +467,7 @@ function searchV2(e, spreadsheet, sheet)
       {
         range.setValue(e.oldValue)
         SpreadsheetApp.flush();
-        Browser.msgBox('Please toggle the checkbox to change discounts. ')
+        Browser.msgBox('Are you authorized to change these discounts?')
       }
     }
   }
