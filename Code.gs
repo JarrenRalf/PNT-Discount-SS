@@ -35,12 +35,16 @@ function onEdit(e)
  */
 function onOpen(e)
 {
+  const spreadsheet = e.source;
+
   SpreadsheetApp.getUi().createMenu('PNT Controls')
     .addItem('Update Price', 'updateAdagioBasePrice')
     .addItem('Update Items (from inventory.csv)', 'updateAdagioDatabase')
     .addToUi();
 
-  const filter = e.source.getSheetByName('Discount Percentages').getFilter();
+  spreadsheet.getSheetByName('Item Search').getRange(1, 3).uncheck();
+
+  const filter = spreadsheet.getSheetByName('Discount Percentages').getFilter();
   filter.setColumnFilterCriteria( 5, SpreadsheetApp.newFilterCriteria().whenCellEmpty().build())
         .setColumnFilterCriteria(15, SpreadsheetApp.newFilterCriteria().whenTextEqualTo("0").build());
 }
@@ -175,100 +179,243 @@ function searchV2(e, spreadsheet, sheet)
   const rowEnd = range.rowEnd;
   const colEnd = range.columnEnd;
 
-  if (col == colEnd && col === 2) // Column two is being edited
+  if (col == colEnd)
   {
-    const startTime = new Date().getTime();
-    const searchResultsDisplayRange = sheet.getRange(1, 1); // The range that will display the number of items found by the search
-    const functionRunTimeRange = sheet.getRange(2, 1);      // The range that will display the runtimes for the search and formatting
-    const itemSearchFullRange = sheet.getRange(4, 1, sheet.getMaxRows() - 3, 9); // The entire range of the Item Search page
-
-    if (row == rowEnd && row === 1) // The search box is being edited
+    if (col === 2) // Column two is being edited
     {
-      const output = [];
-      const searchesOrNot = sheet.getRange(1, 2).clearFormat()                                          // Clear the formatting of the range of the search box
-        .setBorder(true, true, true, true, null, null, 'black', SpreadsheetApp.BorderStyle.SOLID_THICK) // Set the border
-        .setFontFamily("Arial").setFontColor("black").setFontWeight("bold").setFontSize(14)             // Set the various font parameters
-        .setHorizontalAlignment("center").setVerticalAlignment("middle")                                // Set the alignment
-        .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)                                              // Set the wrap strategy
-        .merge().trimWhitespace()                                                                       // Merge and trim the whitespaces at the end of the string
-        .getValue().toString().toLowerCase().split(' not ')                                             // Split the search string at the word 'not'
+      const startTime = new Date().getTime();
+      const searchResultsDisplayRange = sheet.getRange(1, 1); // The range that will display the number of items found by the search
+      const functionRunTimeRange = sheet.getRange(2, 1);      // The range that will display the runtimes for the search and formatting
+      const itemSearchFullRange = sheet.getRange(4, 1, sheet.getMaxRows() - 3, 9); // The entire range of the Item Search page
 
-      const searches = searchesOrNot[0].split(' or ').map(words => words.split(/\s+/)) // Split the search values up by the word 'or' and split the results of that split by whitespace
-
-      if (isNotBlank(searches[0][0])) // If the value in the search box is NOT blank, then compute the search
+      if (row == rowEnd && row === 1) // The search box is being edited
       {
-        spreadsheet.toast('Searching...')
-        const inventorySheet = spreadsheet.getSheetByName('Discount Percentages');
-        const data = inventorySheet.getSheetValues(2, 10, inventorySheet.getLastRow() - 1, 6)
-          .map(d => [d[0], d[1], d[2], d[3] + '%', (d[2]*(100 - d[3])/100).toFixed(2), d[4] + '%', (d[2]*(100 - d[4])/100).toFixed(2), d[5] + '%', (d[2]*(100 - d[5])/100).toFixed(2)]);
-        const numSearches = searches.length; // The number searches
-        var numSearchWords;
+        const output = [];
+        const searchesOrNot = sheet.getRange(1, 2).clearFormat()                                          // Clear the formatting of the range of the search box
+          .setBorder(true, true, true, true, null, null, 'black', SpreadsheetApp.BorderStyle.SOLID_THICK) // Set the border
+          .setFontFamily("Arial").setFontColor("black").setFontWeight("bold").setFontSize(14)             // Set the various font parameters
+          .setHorizontalAlignment("center").setVerticalAlignment("middle")                                // Set the alignment
+          .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)                                              // Set the wrap strategy
+          .merge().trimWhitespace()                                                                       // Merge and trim the whitespaces at the end of the string
+          .getValue().toString().toLowerCase().split(' not ')                                             // Split the search string at the word 'not'
 
-        if (searchesOrNot.length === 1) // The word 'not' WASN'T found in the string
+        const searches = searchesOrNot[0].split(' or ').map(words => words.split(/\s+/)) // Split the search values up by the word 'or' and split the results of that split by whitespace
+
+        if (isNotBlank(searches[0][0])) // If the value in the search box is NOT blank, then compute the search
         {
-          for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
+          spreadsheet.toast('Searching...')
+          const inventorySheet = spreadsheet.getSheetByName('Discount Percentages');
+          const data = inventorySheet.getSheetValues(2, 10, inventorySheet.getLastRow() - 1, 6)
+            .map(d => [d[0], d[1], d[2], Math.round(Number(d[3])) + '%', (d[2]*(100 - d[3])/100).toFixed(2), Math.round(Number(d[4])) + '%', (d[2]*(100 - d[4])/100).toFixed(2), Math.round(Number(d[5])) + '%', (d[2]*(100 - d[5])/100).toFixed(2)]);
+          const numSearches = searches.length; // The number searches
+          var numSearchWords;
+
+          if (searchesOrNot.length === 1) // The word 'not' WASN'T found in the string
           {
-            loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
+            for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
             {
-              numSearchWords = searches[j].length - 1;
-
-              for (var k = 0; k <= numSearchWords; k++) // Loop through each word in each set of searches
+              loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
               {
-                if (data[i][1].toString().toLowerCase().includes(searches[j][k])) // Does the i-th item description contain the k-th search word in the j-th search
-                {
-                  if (k === numSearchWords) // The last search word was succesfully found in the ith item, and thus, this item is returned in the search
-                  {
-                    output.push(data[i]);
-                    break loop;
-                  }
-                }
-                else
-                  break; // One of the words in the User's query was NOT contained in the ith item description, therefore move on to the next item
-              }
-            }
-          }
-        }
-        else // The word 'not' was found in the search string
-        {
-          var dontIncludeTheseWords = searchesOrNot[1].split(/\s+/);
+                numSearchWords = searches[j].length - 1;
 
-          for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
-          {
-            loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
-            {
-              numSearchWords = searches[j].length - 1;
-
-              for (var k = 0; k <= numSearchWords; k++) // Loop through each word in each set of searches
-              {
-                if (data[i][1].toString().toLowerCase().includes(searches[j][k])) // Does the i-th item description contain the k-th search word in the j-th search
+                for (var k = 0; k <= numSearchWords; k++) // Loop through each word in each set of searches
                 {
-                  if (k === numSearchWords) // The last search word was succesfully found in the ith item, and thus, this item is returned in the search
+                  if (data[i][1].toString().toLowerCase().includes(searches[j][k])) // Does the i-th item description contain the k-th search word in the j-th search
                   {
-                    for (var l = 0; l < dontIncludeTheseWords.length; l++)
+                    if (k === numSearchWords) // The last search word was succesfully found in the ith item, and thus, this item is returned in the search
                     {
-                      if (!data[i][1].toString().toLowerCase().includes(dontIncludeTheseWords[l]))
-                      {
-                        if (l === dontIncludeTheseWords.length - 1)
-                        {
-                          output.push(data[i]);
-                          break loop;
-                        }
-                      }
-                      else
-                        break;
+                      output.push(data[i]);
+                      break loop;
                     }
                   }
+                  else
+                    break; // One of the words in the User's query was NOT contained in the ith item description, therefore move on to the next item
                 }
-                else
-                  break; // One of the words in the User's query was NOT contained in the ith item description, therefore move on to the next item 
               }
             }
           }
+          else // The word 'not' was found in the search string
+          {
+            var dontIncludeTheseWords = searchesOrNot[1].split(/\s+/);
+
+            for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
+            {
+              loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
+              {
+                numSearchWords = searches[j].length - 1;
+
+                for (var k = 0; k <= numSearchWords; k++) // Loop through each word in each set of searches
+                {
+                  if (data[i][1].toString().toLowerCase().includes(searches[j][k])) // Does the i-th item description contain the k-th search word in the j-th search
+                  {
+                    if (k === numSearchWords) // The last search word was succesfully found in the ith item, and thus, this item is returned in the search
+                    {
+                      for (var l = 0; l < dontIncludeTheseWords.length; l++)
+                      {
+                        if (!data[i][1].toString().toLowerCase().includes(dontIncludeTheseWords[l]))
+                        {
+                          if (l === dontIncludeTheseWords.length - 1)
+                          {
+                            output.push(data[i]);
+                            break loop;
+                          }
+                        }
+                        else
+                          break;
+                      }
+                    }
+                  }
+                  else
+                    break; // One of the words in the User's query was NOT contained in the ith item description, therefore move on to the next item 
+                }
+              }
+            }
+          }
+
+          const numItems = output.length;
+
+          if (numItems === 0) // No items were found
+          {
+            sheet.getRange('B1').activate(); // Move the user back to the seachbox
+            itemSearchFullRange.clearContent(); // Clear content
+            const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
+            const message = SpreadsheetApp.newRichTextValue().setText("No results found.\nPlease try again.").setTextStyle(0, 16, textStyle).build();
+            searchResultsDisplayRange.setRichTextValue(message);
+          }
+          else
+          {
+            const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
+            const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
+            sheet.getRange('B4').activate(); // Move the user to the top of the search items
+            itemSearchFullRange.clearContent().offset(0, 0, numItems, 9).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(output);
+            (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
+          }
+
+          spreadsheet.toast('Searching Complete.')
+        }
+        else if (isNotBlank(e.oldValue) && userHasPressedDelete(e.value)) // If the user deletes the data in the search box, then ...
+        {
+          itemSearchFullRange.setBackground('white').setValue('');
+          searchResultsDisplayRange.setValue('');
+        }
+        else
+        {
+          itemSearchFullRange.clearContent(); // Clear content 
+          const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
+          const message = SpreadsheetApp.newRichTextValue().setText("Invalid search.\nPlease try again.").setTextStyle(0, 14, textStyle).build();
+          searchResultsDisplayRange.setRichTextValue(message);
         }
 
-        const numItems = output.length;
+        functionRunTimeRange.setValue((new Date().getTime() - startTime)/1000 + " seconds");
+      }
+      else if (row != rowEnd && row > 3) // Multiple lines are being pasted
+      {
+        const values = range.getValues().filter(blank => isNotBlank(blank[0]))
 
-        if (numItems === 0) // No items were found
+        if (values.length !== 0) // Don't run function if every value is blank, probably means the user pressed the delete key on a large selection
+        {
+          const inventorySheet = spreadsheet.getSheetByName('Discount Percentages');
+          const data = inventorySheet.getSheetValues(2, 10, inventorySheet.getLastRow() - 1, 6)
+            .map(d => [d[0], d[1], d[2], d[3] + '%', (d[2]*(100 - d[3])/100).toFixed(2), d[4] + '%', (d[2]*(100 - d[4])/100).toFixed(2), d[5] + '%', (d[2]*(100 - d[5])/100).toFixed(2)]);
+          var someSKUsNotFound = false, skus;
+
+          if (values[0][0].toString().includes(' - ')) // Strip the sku from the first part of the google description
+          {
+            skus = values.map(item => {
+            
+              for (var i = 0; i < data.length; i++)
+              {
+                if (data[i][1].toString().split(" - ").pop().toUpperCase() == item[0].toString().split(" - ").pop().toUpperCase())
+                  return data[i];
+              }
+
+              someSKUsNotFound = true;
+
+              return ['SKU Not Found:', item[0].toString().split(" - ").pop().toUpperCase(), '', '', '', '', '']
+            });
+          }
+          else if (values[0][0].toString().includes('-'))
+          {
+            skus = values.map(sku => sku[0].substring(0,4) + sku[0].substring(5,9) + sku[0].substring(10)).map(item => {
+            
+              for (var i = 0; i < data.length; i++)
+              {
+                if (data[i][1].toString().split(" - ").pop().toUpperCase() == item.toString().toUpperCase())
+                  return data[i];
+              }
+
+              someSKUsNotFound = true;
+
+              return ['SKU Not Found:', item, '', '', '', '', '', '', '']
+            });
+          }
+          else
+          {
+            skus = values.map(item => {
+            
+              for (var i = 0; i < data.length; i++)
+              {
+                if (data[i][1].toString().split(" - ").pop().toUpperCase() == item[0].toString().toUpperCase())
+                  return data[i];
+              }
+
+              someSKUsNotFound = true;
+
+              return ['SKU Not Found:', item[0], '', '', '', '', '', '', '']
+            });
+          }
+      
+          if (someSKUsNotFound)
+          {
+            const skusNotFound = [];
+            var isSkuFound;
+
+            const skusFound = skus.filter(item => {
+              isSkuFound = item[0] !== 'SKU Not Found:'
+
+              if (!isSkuFound)
+                skusNotFound.push(item)
+
+              return isSkuFound;
+            })
+
+            const numSkusFound = skusFound.length;
+            const numSkusNotFound = skusNotFound.length;
+            const items = [].concat.apply([], [skusNotFound, skusFound]); // Concatenate all of the item values as a 2-D array
+            var numItems = items.length
+            const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'])
+            const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
+            const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
+            const WHITE = new Array(9).fill('white')
+            const YELLOW = new Array(9).fill('#ffe599')
+            const colours = [].concat.apply([], [new Array(numSkusNotFound).fill(YELLOW), new Array(numSkusFound).fill(WHITE)]); // Concatenate all of the item values as a 2-D array
+
+            itemSearchFullRange.clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
+              .offset(0, 0, numItems, 9)
+                .setFontFamily('Arial').setFontWeight('bold').setFontSize(12).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours)
+                .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(items).activate();
+
+            if (numSkusFound > 0)
+              itemSearchFullRange.offset(numSkusNotFound, 0, numSkusFound, 9).activate()
+          }
+          else // All SKUs were succefully found
+          {
+            var numItems = skus.length
+            const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'])
+            const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
+            const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
+
+            itemSearchFullRange.clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
+              .offset(0, 0, numItems, 9)
+                .setFontFamily('Arial').setFontWeight('bold').setFontSize(12).setHorizontalAlignments(horizontalAlignments)
+                .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(skus).activate()
+          }
+
+          (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
+          spreadsheet.toast('Searching Complete.')
+          functionRunTimeRange.setValue((new Date().getTime() - startTime)/1000 + " seconds");
+        }
+        else
         {
           sheet.getRange('B1').activate(); // Move the user back to the seachbox
           itemSearchFullRange.clearContent(); // Clear content
@@ -276,146 +423,51 @@ function searchV2(e, spreadsheet, sheet)
           const message = SpreadsheetApp.newRichTextValue().setText("No results found.\nPlease try again.").setTextStyle(0, 16, textStyle).build();
           searchResultsDisplayRange.setRichTextValue(message);
         }
-        else
-        {
-          const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
-          const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
-          sheet.getRange('B4').activate(); // Move the user to the top of the search items
-          itemSearchFullRange.clearContent().offset(0, 0, numItems, 9).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(output);
-          (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
-        }
-
-        spreadsheet.toast('Searching Complete.')
       }
-      else if (isNotBlank(e.oldValue) && userHasPressedDelete(e.value)) // If the user deletes the data in the search box, then ...
-      {
-        itemSearchFullRange.setBackground('white').setValue('');
-        searchResultsDisplayRange.setValue('');
-      }
-      else
-      {
-        itemSearchFullRange.clearContent(); // Clear content 
-        const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
-        const message = SpreadsheetApp.newRichTextValue().setText("Invalid search.\nPlease try again.").setTextStyle(0, 14, textStyle).build();
-        searchResultsDisplayRange.setRichTextValue(message);
-      }
-
-      functionRunTimeRange.setValue((new Date().getTime() - startTime)/1000 + " seconds");
     }
-    else if (row != rowEnd && row > 3) // Multiple lines are being pasted
+    else if (col > 3 && col <= 9 && row == rowEnd && row > 3)
     {
-      const values = range.getValues().filter(blank => isNotBlank(blank[0]))
-
-      if (values.length !== 0) // Don't run function if every value is blank, probably means the user pressed the delete key on a large selection
+      if (range.offset(1 - row, 3 - col).isChecked())
       {
-        const inventorySheet = spreadsheet.getSheetByName('Discount Percentages');
-        const data = inventorySheet.getSheetValues(2, 10, inventorySheet.getLastRow() - 1, 6)
-          .map(d => [d[0], d[1], d[2], d[3] + '%', (d[2]*(100 - d[3])/100).toFixed(2), d[4] + '%', (d[2]*(100 - d[4])/100).toFixed(2), d[5] + '%', (d[2]*(100 - d[5])/100).toFixed(2)]);
-        var someSKUsNotFound = false, skus;
+        const sku = range.offset(0, 2 - col).getValue().split(' - ').pop().toUpperCase();
+        const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
+        const itemIndex = discountDataSheet.getSheetValues(2, 11, discountDataSheet.getLastRow() - 1, 1).findIndex(description => description[0].split(' - ').pop().toUpperCase() === sku);
 
-        if (values[0][0].toString().includes(' - ')) // Strip the sku from the first part of the google description
+        if (itemIndex !== -1)
         {
-          skus = values.map(item => {
+          switch (col)
+          {
+            case 4:
+            case 6:
+            case 8:
+              var newPercentage = range.getValue();
+              discountDataSheet.getRange(itemIndex + 2, col/2 + 11).setNumberFormat('@').setValue(newPercentage.toString());
+              range.setNumberFormat('@').setValue(newPercentage + '%')
+              break;
+            case 5:
+            case 7:
+            case 9:
+              const newPrice = range.getValue();
+              var newPercentage = (1 - Number(newPrice)/Number(range.offset(0, 3 - col).getValue()))*100
+              discountDataSheet.getRange(itemIndex + 2, (col - 1)/2 + 11).setNumberFormat('@').setValue(newPercentage);
+              range.offset(0, -1, 1, 2).setNumberFormats([['@', '$0.00']]).setValues([[Math.round(newPercentage).toString() + '%', newPrice]])
+              break;
+          }
           
-            for (var i = 0; i < data.length; i++)
-            {
-              if (data[i][1].toString().split(" - ").pop().toUpperCase() == item[0].toString().split(" - ").pop().toUpperCase())
-                return data[i];
-            }
-
-            someSKUsNotFound = true;
-
-            return ['SKU Not Found:', item[0].toString().split(" - ").pop().toUpperCase(), '', '', '', '', '']
-          });
-        }
-        else if (values[0][0].toString().includes('-'))
-        {
-          skus = values.map(sku => sku[0].substring(0,4) + sku[0].substring(5,9) + sku[0].substring(10)).map(item => {
-          
-            for (var i = 0; i < data.length; i++)
-            {
-              if (data[i][1].toString().split(" - ").pop().toUpperCase() == item.toString().toUpperCase())
-                return data[i];
-            }
-
-            someSKUsNotFound = true;
-
-            return ['SKU Not Found:', item, '', '', '', '', '', '', '']
-          });
+          spreadsheet.toast('', 'Discount Updated')
         }
         else
         {
-          skus = values.map(item => {
-          
-            for (var i = 0; i < data.length; i++)
-            {
-              if (data[i][1].toString().split(" - ").pop().toUpperCase() == item[0].toString().toUpperCase())
-                return data[i];
-            }
-
-            someSKUsNotFound = true;
-
-            return ['SKU Not Found:', item[0], '', '', '', '', '', '', '']
-          });
+          range.setValue(e.oldValue)
+          SpreadsheetApp.flush()
+          Browser.msgBox('Item not found on the Discount Percentages sheet.')
         }
-     
-        if (someSKUsNotFound)
-        {
-          const skusNotFound = [];
-          var isSkuFound;
-
-          const skusFound = skus.filter(item => {
-            isSkuFound = item[0] !== 'SKU Not Found:'
-
-            if (!isSkuFound)
-              skusNotFound.push(item)
-
-            return isSkuFound;
-          })
-
-          const numSkusFound = skusFound.length;
-          const numSkusNotFound = skusNotFound.length;
-          const items = [].concat.apply([], [skusNotFound, skusFound]); // Concatenate all of the item values as a 2-D array
-          var numItems = items.length
-          const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'])
-          const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
-          const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
-          const WHITE = new Array(9).fill('white')
-          const YELLOW = new Array(9).fill('#ffe599')
-          const colours = [].concat.apply([], [new Array(numSkusNotFound).fill(YELLOW), new Array(numSkusFound).fill(WHITE)]); // Concatenate all of the item values as a 2-D array
-
-          itemSearchFullRange.clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
-            .offset(0, 0, numItems, 9)
-              .setFontFamily('Arial').setFontWeight('bold').setFontSize(12).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours)
-              .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(items).activate();
-
-          if (numSkusFound > 0)
-            itemSearchFullRange.offset(numSkusNotFound, 0, numSkusFound, 9).activate()
-        }
-        else // All SKUs were succefully found
-        {
-          var numItems = skus.length
-          const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'])
-          const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
-          const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
-
-          itemSearchFullRange.clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
-            .offset(0, 0, numItems, 9)
-              .setFontFamily('Arial').setFontWeight('bold').setFontSize(12).setHorizontalAlignments(horizontalAlignments)
-              .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(skus).activate()
-        }
-
-        (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
-        spreadsheet.toast('Searching Complete.')
-        functionRunTimeRange.setValue((new Date().getTime() - startTime)/1000 + " seconds");
       }
-      else
+      else // Don't update the price!
       {
-        sheet.getRange('B1').activate(); // Move the user back to the seachbox
-        itemSearchFullRange.clearContent(); // Clear content
-        const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
-        const message = SpreadsheetApp.newRichTextValue().setText("No results found.\nPlease try again.").setTextStyle(0, 16, textStyle).build();
-        searchResultsDisplayRange.setRichTextValue(message);
+        range.setValue(e.oldValue)
+        SpreadsheetApp.flush();
+        Browser.msgBox('Please toggle the checkbox to change discounts. ')
       }
     }
   }
@@ -456,7 +508,7 @@ function sortDataByVendorName(a, b)
 function sortDiscountPercentagesSheet()
 {
   const spreadsheet = SpreadsheetApp.getActive();
-  const discountDataSheet = spreadsheet.getSheetByName('Copy of Discount Percentages');
+  const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
   const discountDataRange = discountDataSheet.getRange(2, 1, discountDataSheet.getLastRow() - 1, 12)
   const discountData = discountDataRange.getValues().sort(sortDataByVendorName).sort(sortDataByVendorName)
   discountDataRange.setValues(discountData)
@@ -546,6 +598,7 @@ function updateAdagioDatabase()
   for (var i = 0; i < numItems_CSV; i++)
   {
     for (var j = 0; j < numItems_Initial; j++)
+    {
       if (discountData[j][0].toString().toUpperCase().trim() == csvData[i][sku].toString().toUpperCase().trim()) // SKU
       {
         googleDescription = csvData[i][description].split(' - ');
@@ -563,7 +616,7 @@ function updateAdagioDatabase()
         discountData[j][10] = csvData[i][description];
         break;
       }
-        
+    }  
 
     if (j === numItems_Initial) // Item was not found in the newest Adagio data, therefore add it to the discount spreadsheet
     {
