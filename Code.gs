@@ -4,7 +4,7 @@
  * @param {Event Object} : The event object
  * @author Jarren Ralf
  */
-function onEdit(e)
+function installedOnEdit(e)
 {
   var spreadsheet = e.source;
   var sheet = spreadsheet.getActiveSheet(); // The active sheet that the onEdit event is occuring on
@@ -15,7 +15,7 @@ function onEdit(e)
     if (sheetName === "Item Search") // Check if the user is searching for an item or trying to marry, unmarry or add a new item to the upc database
       searchV2(e, spreadsheet, sheet);
     else if (sheetName === "Discount Percentages") // Check if the user is changing the discount values
-      changeDiscountStructure(e, spreadsheet);
+      changeDiscountStructure(e, spreadsheet, sheet);
   } 
   catch (err) 
   {
@@ -24,6 +24,49 @@ function onEdit(e)
     Browser.msgBox(error)
     throw new Error(error);
   }
+}
+
+/**
+ * This function sends Adrian the shopify update email. It takes all of the data that is on the Shopify Update page and it puts in the body of the email.
+ * Once the email is sent the page is cleared and ready to collect new changes.
+ * 
+ * @author Jarren Ralf
+ */
+function sendShopifyUpdateEmail()
+{
+  const shopifyUpdateSheet = SpreadsheetApp.getActive().getSheetByName('Shopify Update');
+  const lastRow = shopifyUpdateSheet.getLastRow();
+
+  if (lastRow > 1)
+  {
+    const range = shopifyUpdateSheet.getRange(2, 1, lastRow - 1, 5)
+    const itemValues = range.getValues();
+    const htmlOutput = HtmlService.createHtmlOutputFromFile('shopifyUpdateEmail')
+    const numItems = itemValues.length;
+    
+    for (var i = 0; i < numItems; i++)
+      htmlOutput.append(
+        '<tr style="height: 20px">' +
+        '<td class="s4" dir="ltr">' + itemValues[i][0] + '</td>' +
+        '<td class="s5" dir="ltr">$' + Number(itemValues[i][1]).toFixed(2) + '</td>' +
+        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][2]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][2] + '</td>') +
+        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][3]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][3] + '</td>') +
+        '<td class="s7" dir="ltr" style="background-color:' + ((itemValues[i][4]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][4] + '</td></tr>')
+      )
+
+    htmlOutput.append('</tbody></table></div>')
+
+    MailApp.sendEmail({
+      to: "adrian@pacificnetandtwine.com", 
+      subject: "Shopify Requires an Update for it's Discount Percentages",
+      htmlBody: htmlOutput.getContent(),
+    });
+
+    range.clearContent();
+    Logger.log('Email sent!')
+  }
+  else
+    Logger.log('No email sent because there were no new prices changes.')
 }
 
 /**
@@ -50,13 +93,120 @@ function onOpen(e)
 }
 
 /**
- * This function checks if the user has madsse changes to any of the 3 relevant discscount markup columns.
+ * This function takes the values that the user has just changed on the Discount Percentages page, specifically changes to the 3 discounnt structures that we use,
+ * and it logs those changes on the Shopify Update sheet.
+ * 
+ * @param {Range}             range : The active range that was just editted by the user.
+ * @param {Number}              row : The first row that was editted by the user.
+ * @param {Number}              col : The first column that was editted by the user.
+ * @param {Number}          numRows : The number of rows that were editted by the user.
+ * @param {Number}          numCols : The number of columns that were editted by the user.
+ * @param {Object[][]}       values : The new values that the user has just changed on the sheet.
+ * @param {Spreadsheet} spreadsheet : The active spreadsheet
+ * @param {Sheet}             sheet : The sheet that is being edited
+ * @param {Boolean}    isSingleCell : Whether a single cell was editted or not.
+ * @author Jarren Ralf
+ */
+function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, spreadsheet, sheet, isSingleCell)
+{
+  if (isSingleCell)
+    spreadsheet.toast('Adding your change to the shopify update page...', 'Shopify Updating', -1)
+  else
+    spreadsheet.toast('This may take up to 30 seconds. Adding your change to the shopify update page...', 'Shopify Updating', -1)
+
+  const shopifyUpdateSheet = spreadsheet.getSheetByName('Shopify Update');
+  const lastRow = shopifyUpdateSheet.getLastRow();
+
+  if (lastRow > 1)
+  {
+    const recentlyUpdatedItems = shopifyUpdateSheet.getSheetValues(2, 1, lastRow - 1, 5)
+    var idx;
+
+    if (isSingleCell)
+    {
+      const newItem = range.offset(0, 11 - col, numRows, 5).getValues()[0]
+      idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+      if (idx !== -1)
+        recentlyUpdatedItems[idx][col - 11] = values[0][0]; // This was the single change that was made by the user
+      else
+        recentlyUpdatedItems.push(newItem)
+    }
+    else if (numCols == 3 && col == 13)
+    {
+      range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
+
+        if (!sheet.isRowHiddenByFilter(row + r))
+        {
+          idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+          if (idx !== -1)
+          {
+            recentlyUpdatedItems[idx][2] = newItem[2];
+            recentlyUpdatedItems[idx][3] = newItem[3];
+            recentlyUpdatedItems[idx][4] = newItem[4];
+          }
+          else
+            recentlyUpdatedItems.push(newItem)
+        }
+      })
+    }
+    else if (numCols == 2)
+    {
+      const colIdx_1 = col - 11;
+      const colIdx_2 = col - 10;
+
+      range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
+
+        if (!sheet.isRowHiddenByFilter(row + r))
+        {
+          idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+          if (idx !== -1)
+          {
+            recentlyUpdatedItems[idx][colIdx_1] = newItem[colIdx_1];
+            recentlyUpdatedItems[idx][colIdx_2] = newItem[colIdx_2];
+          }
+          else
+            recentlyUpdatedItems.push(newItem)
+        }
+      })
+    }
+    else if (numCols == 1)
+    {
+      const colIdx = col - 11;
+
+      range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
+
+        if (!sheet.isRowHiddenByFilter(row + r))
+        {
+          idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+          if (idx !== -1)
+            recentlyUpdatedItems[idx][colIdx] = newItem[colIdx];
+          else
+            recentlyUpdatedItems.push(newItem)
+        }
+      })
+    }
+
+    shopifyUpdateSheet.getRange(2, 1, recentlyUpdatedItems.length, 5).setValues(recentlyUpdatedItems);
+  }
+  else // There are no other items currently on the list therefore add the recent change straight to the list
+    shopifyUpdateSheet.getRange(2, 1, numRows, 5).setValues(range.offset(0, 11 - col, numRows, 5).getValues())
+
+  spreadsheet.toast('Update COMPLETED', 'Shopify Updated')
+}
+
+/**
+ * This function checks if the user has made changes to any of the 3 relevant discscount markup columns.
  * 
  * @param {Event Object}     e      : The event object generated by an on edit event.
  * @param {Spreadsheet} spreadsheet : The active spreadsheet
+ * @param    {Sheet}        sheet   : The sheet that is being edited
  * @author Jarren Ralf
  */
-function changeDiscountStructure(e, spreadsheet)
+function changeDiscountStructure(e, spreadsheet, sheet)
 {
   const range = e.range;
   const col = range.columnStart;
@@ -75,16 +225,22 @@ function changeDiscountStructure(e, spreadsheet)
         else // Assumed to be an undo 
           spreadsheet.toast('Undo: Successful');
       else if (isEveryValueBlank(values)) // Every value is blank, therefore this is the user clicking delete
+      {
         range.offset(0, 13 - col, numRows, 3).setValue('').offset(0, -8, numRows, 1).setValue(new Date().toDateString());
+        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
+      }
       else if (values.some(vals => vals.some(num => isNaN(Number(num))))) // Atleast one of the entries contains a letter
       {
         range.offset(0, 13 - col, numRows, 3).setValue(0).offset(0, -8, numRows, 1).setValue('');
         spreadsheet.toast('Numerals only')
       }
-      else // Assumed to be a user make an edit to a single row but multiple columns
+      else // Assumed to be a user make an edit to a multiple rows and 1 or more columns
+      {
         range.offset(0, 5 - col, numRows, 1).setValue(new Date().toDateString());
+        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
+      }
     }
-    else if (numCols > 1) // Multiple columns were change in 1 row
+    else if (numCols > 1) // Multiple columns were changed in 1 row
     {
       if (col + numCols > 16) // Too many columns were changed
         if (isEveryValueBlank(values)) // Every value is blank, therefore this is the user clicking delete
@@ -92,14 +248,22 @@ function changeDiscountStructure(e, spreadsheet)
         else // Assumed to be an undo 
           spreadsheet.toast('Undo: Successful');
       else if (isEveryValueBlank(values)) // Every value is blank, therefore this is the user clicking delete
+      {
         range.offset(0, 13 - col, 1, 3).setValues([['', '', '']]).offset(0, -8, 1, 1).setValue(new Date().toDateString());
+        SpreadsheetApp.flush();
+        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
+      }
+        
       else if (values[0].some(num => isNaN(Number(num)))) // Atleast one of the entries contains a letter
       {
         range.offset(0, 13 - col, 1, 3).setValues([[0, 0, 0]]).offset(0, -8, 1, 1).setValue('');
         spreadsheet.toast('Numerals only')
       }
       else // Assumed to be a user make an edit to a single row but multiple columns
+      {
         range.offset(0, 5 - col, 1, 1).setValue(new Date().toDateString());
+        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
+      }
     }
     else // One cell is being changed given only 1 range in the range list
     {
@@ -113,12 +277,17 @@ function changeDiscountStructure(e, spreadsheet)
           spreadsheet.toast('Numerals only')
         }
         else
+        {
           range.offset(0, 5 - col, 1, 1).setValue(new Date().toDateString());
+          addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, true)
+        }
       }
       else if (oldValue == 0) // It appears that the user has pressed delete over a value of zero, meaning that 0 is the chosen discount
       {
         range.offset(0, 13 - col, 1, 3).setValues([['', '', '']]).offset(0, -8, 1, 1).setValue(new Date().toDateString());
         spreadsheet.toast('0% Discount: Confirmed');
+        SpreadsheetApp.flush()
+        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, true)
       }
     }
   }
@@ -515,14 +684,26 @@ function sortDiscountPercentagesSheet()
 }
 
 /**
- * This function creates a trigger that will update the pricing daily.
+ * This function creates all of the triggers that make the spreadsheet function properly.
  * 
  * @author Jarren Ralf
  */
-function triggerPriceUpdate()
+function trigger_CreateAll()
 {
+  ScriptApp.newTrigger('installedOnEdit').forSpreadsheet(SpreadsheetApp.getActive()).onEdit().create()
   ScriptApp.newTrigger('updateAdagioDatabase').timeBased().everyDays(1).atHour(5).create()
   ScriptApp.newTrigger('updateAdagioBasePrice').timeBased().everyDays(1).atHour(6).create()
+  ScriptApp.newTrigger('sendShopifyUpdateEmail').timeBased().everyDays(1).atHour(15).create()
+}
+
+/**
+ * This function deletes all of the triggers.
+ * 
+ * @author Jarren Ralf
+ */
+function trigger_DeleteAll()
+{
+  ScriptApp.getProjectTriggers().map(trigger => ScriptApp.deleteTrigger(trigger));
 }
 
 /**
