@@ -27,49 +27,6 @@ function installedOnEdit(e)
 }
 
 /**
- * This function sends Adrian the shopify update email. It takes all of the data that is on the Shopify Update page and it puts in the body of the email.
- * Once the email is sent the page is cleared and ready to collect new changes.
- * 
- * @author Jarren Ralf
- */
-function sendShopifyUpdateEmail()
-{
-  const shopifyUpdateSheet = SpreadsheetApp.getActive().getSheetByName('Shopify Update');
-  const lastRow = shopifyUpdateSheet.getLastRow();
-
-  if (lastRow > 1)
-  {
-    const range = shopifyUpdateSheet.getRange(2, 1, lastRow - 1, 5)
-    const itemValues = range.getValues();
-    const htmlOutput = HtmlService.createHtmlOutputFromFile('shopifyUpdateEmail')
-    const numItems = itemValues.length;
-    
-    for (var i = 0; i < numItems; i++)
-      htmlOutput.append(
-        '<tr style="height: 20px">' +
-        '<td class="s4" dir="ltr">' + itemValues[i][0] + '</td>' +
-        '<td class="s5" dir="ltr">$' + Number(itemValues[i][1]).toFixed(2) + '</td>' +
-        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][2]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][2] + '</td>') +
-        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][3]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][3] + '</td>') +
-        '<td class="s7" dir="ltr" style="background-color:' + ((itemValues[i][4]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][4] + '</td></tr>')
-      )
-
-    htmlOutput.append('</tbody></table></div>')
-
-    MailApp.sendEmail({
-      to: "adrian@pacificnetandtwine.com", 
-      subject: "Shopify Requires an Update for it's Discount Percentages",
-      htmlBody: htmlOutput.getContent(),
-    });
-
-    range.clearContent();
-    Logger.log('Email sent!')
-  }
-  else
-    Logger.log('No email sent because there were no new prices changes.')
-}
-
-/**
  * This function loads a Menu where the user can click a button to update the Adagio price. 
  * It also puts a filter on the Discount Percentages page as to only display the items that do not have discounts assigned yet.
  * 
@@ -93,21 +50,22 @@ function onOpen(e)
 }
 
 /**
- * This function takes the values that the user has just changed on the Discount Percentages page, specifically changes to the 3 discounnt structures that we use,
+ * This function takes the values that the user has just changed on the Discount Percentages page, specifically changes to the 3 discount structures that we use,
  * and it logs those changes on the Shopify Update sheet.
  * 
- * @param {Range}             range : The active range that was just editted by the user.
- * @param {Number}              row : The first row that was editted by the user.
- * @param {Number}              col : The first column that was editted by the user.
- * @param {Number}          numRows : The number of rows that were editted by the user.
- * @param {Number}          numCols : The number of columns that were editted by the user.
- * @param {Object[][]}       values : The new values that the user has just changed on the sheet.
- * @param {Spreadsheet} spreadsheet : The active spreadsheet
- * @param {Sheet}             sheet : The sheet that is being edited
- * @param {Boolean}    isSingleCell : Whether a single cell was editted or not.
+ * @param {Range}               range : The active range that was just editted by the user.
+ * @param {Number}                row : The first row that was editted by the user.
+ * @param {Number}                col : The first column that was editted by the user.
+ * @param {Number}            numRows : The number of rows that were editted by the user.
+ * @param {Number}            numCols : The number of columns that were editted by the user.
+ * @param {Object[][]}         values : The new values that the user has just changed on the sheet.
+ * @param {Spreadsheet}   spreadsheet : The active spreadsheet
+ * @param {Sheet}               sheet : The sheet that is being edited
+ * @param {Boolean}      isSingleCell : Whether a single cell was editted or not.
+ * @param {Boolean} isItemSearchSheet : Whether the active sheet is the item search page or not.
  * @author Jarren Ralf
  */
-function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, spreadsheet, sheet, isSingleCell)
+function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, spreadsheet, sheet, isSingleCell, isItemSearchSheet)
 {
   if (isSingleCell)
     spreadsheet.toast('Adding your change to the shopify update page...', 'Shopify Updating', -1)
@@ -117,83 +75,129 @@ function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, s
   const shopifyUpdateSheet = spreadsheet.getSheetByName('Shopify Update');
   const lastRow = shopifyUpdateSheet.getLastRow();
 
-  if (lastRow > 1)
+  if (isItemSearchSheet)
   {
-    const recentlyUpdatedItems = shopifyUpdateSheet.getSheetValues(2, 1, lastRow - 1, 5)
-    var idx;
+    const removePriceColumns = u => [u[0], u[1], (Number(u[2]) < 1) ? u[2]*100 : u[2], (Number(u[4]) < 1) ? u[4]*100 : u[4], (Number(u[6]) < 1) ? u[6]*100 : u[6]];
 
-    if (isSingleCell)
+    if (lastRow > 1)
     {
-      const newItem = range.offset(0, 11 - col, numRows, 5).getValues()[0]
-      idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+      const recentlyUpdatedItems = shopifyUpdateSheet.getSheetValues(2, 1, lastRow - 1, 5)
+      var idx;
 
-      if (idx !== -1)
-        recentlyUpdatedItems[idx][col - 11] = values[0][0]; // This was the single change that was made by the user
+      if (isSingleCell)
+      {
+        const newItem = range.offset(0, 2 - col, numRows, 7).getValues()[0]
+        idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+        if (idx !== -1)
+          recentlyUpdatedItems[idx][Math.floor(col/2)] = values; // This was the single change that was made by the user
+        else
+        {
+          newItem[(col % 2 == 0) ? col - 2 : col - 3] = values;
+          recentlyUpdatedItems.push(...[newItem].map(removePriceColumns));
+        }
+      }
       else
-        recentlyUpdatedItems.push(newItem)
-    }
-    else if (numCols == 3 && col == 13)
-    {
-      range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
+      {
+        const colIdx_ShopifyUpdate = Math.floor(col/2);
+        const colIdx_ItemSearch = (col % 2 == 0) ? col - 2 : col - 3;
 
-        if (!sheet.isRowHiddenByFilter(row + r))
-        {
+        range.offset(0, 2 - col, numRows, 8).getValues().map((newItem, r) => {
+
           idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
 
           if (idx !== -1)
-          {
-            recentlyUpdatedItems[idx][2] = newItem[2];
-            recentlyUpdatedItems[idx][3] = newItem[3];
-            recentlyUpdatedItems[idx][4] = newItem[4];
-          }
+            recentlyUpdatedItems[idx][colIdx_ShopifyUpdate] = (newItem[colIdx_ItemSearch] < 1) ? newItem[colIdx_ItemSearch]*100 : newItem[colIdx_ItemSearch];
           else
-            recentlyUpdatedItems.push(newItem)
-        }
-      })
+            recentlyUpdatedItems.push(...[newItem].map(removePriceColumns))
+        })
+      }
+
+      shopifyUpdateSheet.getRange(2, 1, recentlyUpdatedItems.length, 5).setValues(recentlyUpdatedItems);
     }
-    else if (numCols == 2)
-    {
-      const colIdx_1 = col - 11;
-      const colIdx_2 = col - 10;
-
-      range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
-
-        if (!sheet.isRowHiddenByFilter(row + r))
-        {
-          idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
-
-          if (idx !== -1)
-          {
-            recentlyUpdatedItems[idx][colIdx_1] = newItem[colIdx_1];
-            recentlyUpdatedItems[idx][colIdx_2] = newItem[colIdx_2];
-          }
-          else
-            recentlyUpdatedItems.push(newItem)
-        }
-      })
-    }
-    else if (numCols == 1)
-    {
-      const colIdx = col - 11;
-
-      range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
-
-        if (!sheet.isRowHiddenByFilter(row + r))
-        {
-          idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
-
-          if (idx !== -1)
-            recentlyUpdatedItems[idx][colIdx] = newItem[colIdx];
-          else
-            recentlyUpdatedItems.push(newItem)
-        }
-      })
-    }
-
-    shopifyUpdateSheet.getRange(2, 1, recentlyUpdatedItems.length, 5).setValues(recentlyUpdatedItems);
+    else // There are no other items currently on the list therefore add the recent change straight to the list
+      shopifyUpdateSheet.getRange(2, 1, numRows, 5).setValues(range.offset(0, 2 - col, numRows, 7).getValues().map(removePriceColumns))
   }
-  else // There are no other items currently on the list therefore add the recent change straight to the list
-    shopifyUpdateSheet.getRange(2, 1, numRows, 5).setValues(range.offset(0, 11 - col, numRows, 5).getValues())
+  else // Discount Percentages sheet
+  {
+    if (lastRow > 1)
+    {
+      const recentlyUpdatedItems = shopifyUpdateSheet.getSheetValues(2, 1, lastRow - 1, 5)
+      var idx;
+
+      if (isSingleCell)
+      {
+        const newItem = range.offset(0, 11 - col, numRows, 5).getValues()[0]
+        idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+        if (idx !== -1)
+          recentlyUpdatedItems[idx][col - 11] = values[0][0]; // This was the single change that was made by the user
+        else
+          recentlyUpdatedItems.push(newItem)
+      }
+      else if (numCols == 3 && col == 13)
+      {
+        range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
+
+          if (!sheet.isRowHiddenByFilter(row + r))
+          {
+            idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+            if (idx !== -1)
+            {
+              recentlyUpdatedItems[idx][2] = newItem[2];
+              recentlyUpdatedItems[idx][3] = newItem[3];
+              recentlyUpdatedItems[idx][4] = newItem[4];
+            }
+            else
+              recentlyUpdatedItems.push(newItem)
+          }
+        })
+      }
+      else if (numCols == 2)
+      {
+        const colIdx_1 = col - 11;
+        const colIdx_2 = col - 10;
+
+        range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
+
+          if (!sheet.isRowHiddenByFilter(row + r))
+          {
+            idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+            if (idx !== -1)
+            {
+              recentlyUpdatedItems[idx][colIdx_1] = newItem[colIdx_1];
+              recentlyUpdatedItems[idx][colIdx_2] = newItem[colIdx_2];
+            }
+            else
+              recentlyUpdatedItems.push(newItem)
+          }
+        })
+      }
+      else if (numCols == 1)
+      {
+        const colIdx = col - 11;
+
+        range.offset(0, 11 - col, numRows, 5).getValues().map((newItem, r) => {
+
+          if (!sheet.isRowHiddenByFilter(row + r))
+          {
+            idx = recentlyUpdatedItems.findIndex(item => item[0] == newItem[0])
+
+            if (idx !== -1)
+              recentlyUpdatedItems[idx][colIdx] = newItem[colIdx];
+            else
+              recentlyUpdatedItems.push(newItem)
+          }
+        })
+      }
+
+      shopifyUpdateSheet.getRange(2, 1, recentlyUpdatedItems.length, 5).setValues(recentlyUpdatedItems);
+    }
+    else // There are no other items currently on the list therefore add the recent change straight to the list
+      shopifyUpdateSheet.getRange(2, 1, numRows, 5).setValues(range.offset(0, 11 - col, numRows, 5).getValues())
+  }
 
   spreadsheet.toast('Update COMPLETED', 'Shopify Updated')
 }
@@ -375,7 +379,7 @@ function searchV2(e, spreadsheet, sheet)
           spreadsheet.toast('Searching...')
           const inventorySheet = spreadsheet.getSheetByName('Discount Percentages');
           const data = inventorySheet.getSheetValues(2, 10, inventorySheet.getLastRow() - 1, 6)
-            .map(d => [d[0], d[1], d[2], Math.round(Number(d[3])) + '%', (d[2]*(100 - d[3])/100).toFixed(2), Math.round(Number(d[4])) + '%', (d[2]*(100 - d[4])/100).toFixed(2), Math.round(Number(d[5])) + '%', (d[2]*(100 - d[5])/100).toFixed(2)]);
+            .map(d => [d[0], d[1], d[2], Number(d[3])/100, (d[2]*(100 - d[3])/100).toFixed(2), Number(d[4])/100, (d[2]*(100 - d[4])/100).toFixed(2), Number(d[5])/100, (d[2]*(100 - d[5])/100).toFixed(2)]);
           const numSearches = searches.length; // The number searches
           var numSearchWords;
 
@@ -453,10 +457,10 @@ function searchV2(e, spreadsheet, sheet)
           }
           else
           {
-            const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
+            const numberFormats_ItemSearch = [...Array(numItems)].map(e => ['@', '@', '$0.00', '#%', '$0.00', '#%', '$0.00', '#%', '$0.00']); // Currency format
             const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
             sheet.getRange('B4').activate(); // Move the user to the top of the search items
-            itemSearchFullRange.clearContent().offset(0, 0, numItems, 9).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(output);
+            itemSearchFullRange.clearContent().offset(0, 0, numItems, 9).setNumberFormats(numberFormats_ItemSearch).setFontWeights(fontWeights).setValues(output);
             (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
           }
 
@@ -485,7 +489,7 @@ function searchV2(e, spreadsheet, sheet)
         {
           const inventorySheet = spreadsheet.getSheetByName('Discount Percentages');
           const data = inventorySheet.getSheetValues(2, 10, inventorySheet.getLastRow() - 1, 6)
-            .map(d => [d[0], d[1], d[2], d[3] + '%', (d[2]*(100 - d[3])/100).toFixed(2), d[4] + '%', (d[2]*(100 - d[4])/100).toFixed(2), d[5] + '%', (d[2]*(100 - d[5])/100).toFixed(2)]);
+            .map(d => [d[0], d[1], d[2], d[3]/100, (d[2]*(100 - d[3])/100).toFixed(2), d[4]/100, (d[2]*(100 - d[4])/100).toFixed(2), d[5]/100, (d[2]*(100 - d[5])/100).toFixed(2)]);
           var someSKUsNotFound = false, skus;
 
           if (values[0][0].toString().includes(' - ')) // Strip the sku from the first part of the google description
@@ -553,7 +557,7 @@ function searchV2(e, spreadsheet, sheet)
             const items = [].concat.apply([], [skusNotFound, skusFound]); // Concatenate all of the item values as a 2-D array
             var numItems = items.length
             const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'])
-            const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
+            const numberFormats_ItemSearch = [...Array(numItems)].map(e => ['@', '@', '$0.00', '#%', '$0.00', '#%', '$0.00', '#%', '$0.00']); // Currency format
             const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
             const WHITE = new Array(9).fill('white')
             const YELLOW = new Array(9).fill('#ffe599')
@@ -562,7 +566,7 @@ function searchV2(e, spreadsheet, sheet)
             itemSearchFullRange.clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
               .offset(0, 0, numItems, 9)
                 .setFontFamily('Arial').setFontWeight('bold').setFontSize(12).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours)
-                .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(items).activate();
+                .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats_ItemSearch).setFontWeights(fontWeights).setValues(items).activate();
 
             if (numSkusFound > 0)
               itemSearchFullRange.offset(numSkusNotFound, 0, numSkusFound, 9).activate()
@@ -571,13 +575,13 @@ function searchV2(e, spreadsheet, sheet)
           {
             var numItems = skus.length
             const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'])
-            const numberFormats = [...Array(numItems)].map(e => ['@', '@', '$0.00', '@', '$0.00', '@', '$0.00', '@', '$0.00']); // Currency format
+            const numberFormats_ItemSearch = [...Array(numItems)].map(e => ['@', '@', '$0.00', '#%', '$0.00', '#%', '$0.00', '#%', '$0.00']); // Currency format
             const fontWeights = [...Array(numItems)].map(e => ['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']); // Currency format
 
             itemSearchFullRange.clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
               .offset(0, 0, numItems, 9)
                 .setFontFamily('Arial').setFontWeight('bold').setFontSize(12).setHorizontalAlignments(horizontalAlignments)
-                .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats).setFontWeights(fontWeights).setValues(skus).activate()
+                .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats_ItemSearch).setFontWeights(fontWeights).setValues(skus).activate()
           }
 
           (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
@@ -594,52 +598,216 @@ function searchV2(e, spreadsheet, sheet)
         }
       }
     }
-    else if (col > 3 && col <= 9 && row == rowEnd && row > 3)
+    else if (col > 3 && col <= 9 && row > 3) // The discount or price is being changed
     {
-      if (range.offset(1 - row, 3 - col).isChecked())
+      if (range.offset(1 - row, 3 - col, 1, 1).isChecked()) // The top right hand cell of this spreadsheet has a checkbox that needs to be click before prices can by changed
       {
-        const sku = range.offset(0, 2 - col).getValue().split(' - ').pop().toUpperCase();
-        const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
-        const itemIndex = discountDataSheet.getSheetValues(2, 11, discountDataSheet.getLastRow() - 1, 1).findIndex(description => description[0].split(' - ').pop().toUpperCase() === sku);
+        spreadsheet.toast('', 'Updating discount structure...', -1)
 
-        if (itemIndex !== -1)
+        if (rowEnd > row) // This is a drag action with more than 1 item changing
         {
+          const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
+          const discountData_SKUs = discountDataSheet.getSheetValues(2, 1, discountDataSheet.getLastRow() - 1, 1);
+          
+          const numRows = rowEnd - row + 1;
+          var idx, itemRange, itemValues;
+
           switch (col)
           {
             case 4: // Percentages Changed
             case 6:
             case 8:
-              var newPercentage = range.getValue();
-              discountDataSheet.getRange(itemIndex + 2, col/2 + 11).setNumberFormat('@').setValue(newPercentage.toString());
-              range.offset(0, 0, 1, 2).setNumberFormats([['@', '$0.00']]).setValues([[newPercentage.toString() + '%', Number(range.offset(0, 3 - col).getValue())*(100 - newPercentage)/100]])
+
+              const updatedPrices = [];
+
+              range.offset(0, 2 - col, numRows, col - 1).getValues().map(itemDiscountValues => {
+                idx = discountData_SKUs.findIndex(sku => sku[0] == itemDiscountValues[0].split(' - ').pop()) + 2;
+
+                if (idx !== 1)
+                { 
+                  itemRange = discountDataSheet.getRange(idx, 5, 1, 11);
+                  itemValues = itemRange.getValues()[0];
+                  itemValues[0] = new Date().toDateString(); // Date (Category)
+                  itemValues[col/2 + 6] = itemDiscountValues[col - 2]*100; // Change the discount column
+                  itemRange.setNumberFormat('@').setValues([itemValues])
+                  updatedPrices.push([Number(itemDiscountValues[1])*(100 - Number(itemValues[col/2 + 6]))/100]); // Price
+                }
+              })
+
+              range.offset(0, 1, numRows).setNumberFormat('$0.00').setValues(updatedPrices)
               break;
             case 5: // Price Changed
             case 7:
             case 9:
-              const newPrice = range.getValue();
-              var newPercentage = (1 - Number(newPrice)/Number(range.offset(0, 3 - col).getValue()))*100
-              discountDataSheet.getRange(itemIndex + 2, (col - 1)/2 + 11).setNumberFormat('@').setValue(newPercentage);
-              range.offset(0, -1, 1, 2).setNumberFormats([['@', '$0.00']]).setValues([[Math.round(newPercentage).toString() + '%', newPrice]])
+
+              const updatedPercentagesAndPrices = [];
+
+              range.offset(0, 2 - col, numRows, col - 1).getValues().map(itemDiscountValues => {
+                idx = discountData_SKUs.findIndex(sku => sku[0] == itemDiscountValues[0].split(' - ').pop()) + 2;
+
+                if (idx !== 1)
+                { 
+                  itemRange = discountDataSheet.getRange(idx, 5, 1, 11);
+                  itemValues = itemRange.getValues()[0];
+                  itemValues[0] = new Date().toDateString(); // Date (Category)
+                  itemValues[col/2 + 5.5] = (1 - Number(itemDiscountValues[col - 2])/Number(itemDiscountValues[1]))*100; // Change the appropriate discount column
+                  itemRange.setNumberFormat('@').setValues([itemValues])
+                  updatedPercentagesAndPrices.push([Number(itemValues[col/2 + 5.5])/100, itemDiscountValues[col - 2]]); // Percentage and price
+                }
+              })
+
+              range.offset(0, -1, numRows, 2).setNumberFormats(new Array(numRows).fill(['#%', '$0.00'])).setValues(updatedPercentagesAndPrices)
               break;
           }
-          
-          spreadsheet.toast('', 'Discount Updated')
-        }
-        else
-        {
-          range.setValue(e.oldValue)
+
           SpreadsheetApp.flush()
-          Browser.msgBox('Item not found on the Discount Percentages sheet.')
+          addItemToShopifyUpdatePage(range, row, col, numRows, colEnd - col + 1, '', spreadsheet, sheet, false, true)
+          spreadsheet.toast('', 'Discounts Updated.')
+        }
+        else if (!e.oldValue) // If e.oldValue is undefined then the user used the drag function to change 1 item
+        {
+          const sku = range.offset(0, 2 - col).getValue().split(' - ').pop().toUpperCase();
+          const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
+          const itemIndex = discountDataSheet.getSheetValues(2, 11, discountDataSheet.getLastRow() - 1, 1).findIndex(description => description[0].split(' - ').pop().toUpperCase() === sku);
+
+          if (itemIndex !== -1)
+          {
+            switch (col)
+            {
+              case 4: // Percentages Changed
+              case 6:
+              case 8:
+                var newPercentage = range.getValue();
+                discountDataSheet.getRange(itemIndex + 2, col/2 + 11).setNumberFormat('@').setValue(newPercentage*100);
+                addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
+                range.offset(0, 0, 1, 2).setNumberFormats([['#%', '$0.00']]).setValues([[newPercentage, Number(range.offset(0, 3 - col).getValue())*(1 - newPercentage)]])
+                break;
+              case 5: // Price Changed
+              case 7:
+              case 9:
+                const newPrice = range.getValue();
+                var newPercentage = 1 - Number(newPrice)/Number(range.offset(0, 3 - col).getValue())
+                discountDataSheet.getRange(itemIndex + 2, col/2 + 10.5).setNumberFormat('@').setValue(newPercentage*100);
+                addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
+                range.offset(0, -1, 1, 2).setNumberFormats([['#%', '$0.00']]).setValues([[newPercentage, newPrice]])
+                break;
+            }
+
+            spreadsheet.toast('', 'Discount Updated.')
+          }
+          else
+          {
+            range.setValue(e.oldValue)
+            SpreadsheetApp.flush()
+            Browser.msgBox('Item not found on the Discount Percentages sheet.')
+          }
+        }
+        else // Single row
+        {
+          const sku = range.offset(0, 2 - col).getValue().split(' - ').pop().toUpperCase();
+          const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
+          const itemIndex = discountDataSheet.getSheetValues(2, 11, discountDataSheet.getLastRow() - 1, 1).findIndex(description => description[0].split(' - ').pop().toUpperCase() === sku);
+
+          if (itemIndex !== -1)
+          {
+            switch (col)
+            {
+              case 4: // Percentages Changed
+              case 6:
+              case 8:
+                var newPercentage = range.getValue();
+                discountDataSheet.getRange(itemIndex + 2, col/2 + 11).setNumberFormat('@').setValue(newPercentage*100);
+                addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
+                range.offset(0, 0, 1, 2).setNumberFormats([['#%', '$0.00']]).setValues([[newPercentage, Number(range.offset(0, 3 - col).getValue())*(1 - newPercentage)]])
+                break;
+              case 5: // Price Changed
+              case 7:
+              case 9:
+                const newPrice = range.getValue();
+                var newPercentage = 1 - Number(newPrice)/Number(range.offset(0, 3 - col).getValue())
+                discountDataSheet.getRange(itemIndex + 2, col/2 + 10.5).setNumberFormat('@').setValue(newPercentage*100);
+                addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
+                range.offset(0, -1, 1, 2).setNumberFormats([['#%', '$0.00']]).setValues([[newPercentage, newPrice]])
+                break;
+            }
+            
+            spreadsheet.toast('', 'Discount Updated.')
+          }
+          else
+          {
+            range.setValue(e.oldValue)
+            SpreadsheetApp.flush()
+            Browser.msgBox('Item not found on the Discount Percentages sheet.')
+          }
         }
       }
-      else // Don't update the price!
+      else if (col == 4 || col == 6 || col == 8) // Multiple rows of percentages were changed without authorization
       {
-        range.setValue(e.oldValue)
+        (row === rowEnd) ? 
+          (e.oldValue != undefined) ? 
+            range.setValue(e.oldValue).setNumberFormat('#%') : 
+          range.setValue(0).setNumberFormat('#%') : 
+        range.setNumberFormat('#%').setValues(new Array(rowEnd - row + 1).fill([0]));
+
         SpreadsheetApp.flush();
-        Browser.msgBox('Are you authorized to change these discounts?')
+        Browser.msgBox('You are NOT authorized to change these discounts. **These percentages have not officially changed, compute your search again to re-display the accurate numbers.')
+      }
+      else // Multiple rows of prices were changed without authorization
+      {
+        (row === rowEnd) ? 
+          (e.oldValue != undefined) ? 
+            range.setValue(e.oldValue).setNumberFormat('$0.00') : 
+          range.setValue(0).setNumberFormat('$0.00') : 
+        range.setNumberFormat('$0.00').setValues(new Array(rowEnd - row + 1).fill([0]));
+
+        SpreadsheetApp.flush();
+        Browser.msgBox('You are NOT authorized to change these discounts. **These prices have not officially changed, compute your search again to re-display the accurate numbers.')
       }
     }
   }
+}
+
+/**
+ * This function sends Adrian the shopify update email. It takes all of the data that is on the Shopify Update page and it puts in the body of the email.
+ * Once the email is sent the page is cleared and ready to collect new changes.
+ * 
+ * @author Jarren Ralf
+ */
+function sendShopifyUpdateEmail()
+{
+  const shopifyUpdateSheet = SpreadsheetApp.getActive().getSheetByName('Shopify Update');
+  const lastRow = shopifyUpdateSheet.getLastRow();
+
+  if (lastRow > 1)
+  {
+    const range = shopifyUpdateSheet.getRange(2, 1, lastRow - 1, 5)
+    const itemValues = range.getValues();
+    const htmlOutput = HtmlService.createHtmlOutputFromFile('shopifyUpdateEmail')
+    const numItems = itemValues.length;
+    
+    for (var i = 0; i < numItems; i++)
+      htmlOutput.append(
+        '<tr style="height: 20px">' +
+        '<td class="s4" dir="ltr">' + itemValues[i][0] + '</td>' +
+        '<td class="s5" dir="ltr">$' + Number(itemValues[i][1]).toFixed(2) + '</td>' +
+        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][2]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][2] + '</td>') +
+        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][3]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][3] + '</td>') +
+        '<td class="s7" dir="ltr" style="background-color:' + ((itemValues[i][4]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][4] + '</td></tr>')
+      )
+
+    htmlOutput.append('</tbody></table></div>')
+
+    MailApp.sendEmail({
+      to: "adrian@pacificnetandtwine.com", 
+      subject: "Shopify Requires an Update for it's Discount Percentages",
+      htmlBody: htmlOutput.getContent(),
+    });
+
+    range.clearContent();
+    Logger.log('Email sent!')
+  }
+  else
+    Logger.log('No email sent because there were no new prices changes.')
 }
 
 /**
@@ -716,13 +884,13 @@ function updateAdagioBasePrice()
   const spreadsheet = SpreadsheetApp.getActive();
   spreadsheet.toast('Updating base price...')
   const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
-  const discountDataRange = discountDataSheet.getRange(2, 1, discountDataSheet.getLastRow() - 1, 15)
+  const numRows = discountDataSheet.getLastRow() - 1;
+  const discountDataRange = discountDataSheet.getRange(2, 1, numRows, 15)
   const discountData = discountDataRange.getValues()
   const ss = SpreadsheetApp.openById('1sLhSt5xXPP5y9-9-K8kq4kMfmTuf6a9_l9Ohy0r82gI');
   const adagioDataSheet = ss.getSheetByName('FromAdagio');
   const lastUpdated = ss.getSheetByName('Dashboard').getSheetValues(24, 11, 1, 1)[0][0]
   const adagioData = adagioDataSheet.getSheetValues(2, 17, adagioDataSheet.getLastRow() - 1, 2);
-
 
   for (var j = 0; j < discountData.length; j++)
   {
@@ -746,7 +914,8 @@ function updateAdagioBasePrice()
     }
   }
 
-  discountDataRange.setNumberFormat('@').setValues(discountData)
+  const numberFormats = new Date(numRows).fill(['@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '0', '0', '0', '0'])
+  discountDataRange.setNumberFormats(numberFormats).setValues(discountData)
   const text = 'The prices in this spreadsheet were last updated at ' + Utilities.formatDate(lastUpdated, spreadsheet.getSpreadsheetTimeZone(), 'h:mm a   dd MMM yyyy');
   const richTextValue = SpreadsheetApp.newRichTextValue().setText(text)
     .setTextStyle(0, 52, SpreadsheetApp.newTextStyle().setFontSize(18).setBold(false).build())
@@ -833,8 +1002,8 @@ function updateAdagioDatabase()
   const numItems_Final = discountData.length;
   const numberFormats = [...Array(numItems_Final)].map(e => ['@', '@', '@', '@', '@', '0', '@', '@', '@', '@', '@', '0', '0', '0', '0', '0', '0']); // Currency format
 
-  Logger.log(numItems_Final)
-  Logger.log(numItems_Initial)
+  Logger.log('numItems_Final: ' + numItems_Final)
+  Logger.log('numItems_InitialL: ' + numItems_Initial)
 
   if (numItems_Final > numItems_Initial)
   {
