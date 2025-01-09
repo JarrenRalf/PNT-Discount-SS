@@ -43,6 +43,7 @@ function onOpen(e)
     .addToUi();
 
   spreadsheet.getSheetByName('Item Search').getRange(1, 3).uncheck();
+  spreadsheet.getSheetByName('Shopify Update').hideSheet();
 
   const filter = spreadsheet.getSheetByName('Discount Percentages').getFilter();
   filter.setColumnFilterCriteria( 5, SpreadsheetApp.newFilterCriteria().whenCellEmpty().build())
@@ -791,8 +792,8 @@ function sendShopifyUpdateEmail()
         '<td class="s4" dir="ltr">' + itemValues[i][0] + '</td>' +
         '<td class="s5" dir="ltr">$' + Number(itemValues[i][1]).toFixed(2) + '</td>' +
         '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][2]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][2] + '</td>') +
-        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][3]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][3] + '</td>') +
-        '<td class="s7" dir="ltr" style="background-color:' + ((itemValues[i][4]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][4] + '</td></tr>')
+        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][3]) ? '#ffffff">' + itemValues[i][3] + '</td>' : '#e06666">' + itemValues[i][3] + '</td>') +
+        '<td class="s7" dir="ltr" style="background-color:' + ((itemValues[i][4]) ? '#ffffff">' + itemValues[i][4] + '</td>' : '#e06666">' + itemValues[i][4] + '</td></tr>')
       )
 
     htmlOutput.append('</tbody></table></div>')
