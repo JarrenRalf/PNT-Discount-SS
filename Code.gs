@@ -915,7 +915,7 @@ function updateAdagioBasePrice()
     }
   }
 
-  const numberFormats = new Date(numRows).fill(['@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '0', '0', '0', '0'])
+  const numberFormats = new Array(numRows).fill(['@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '0', '0', '0', '0'])
   discountDataRange.setNumberFormats(numberFormats).setValues(discountData)
   const text = 'The prices in this spreadsheet were last updated at ' + Utilities.formatDate(lastUpdated, spreadsheet.getSpreadsheetTimeZone(), 'h:mm a   dd MMM yyyy');
   const richTextValue = SpreadsheetApp.newRichTextValue().setText(text)
