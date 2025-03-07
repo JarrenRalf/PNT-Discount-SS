@@ -510,7 +510,7 @@ function searchV2(e, spreadsheet, sheet)
           }
           else if (values[0][0].toString().includes('-'))
           {
-            skus = values.map(sku => sku[0].substring(0,4) + sku[0].substring(5,9) + sku[0].substring(10)).map(item => {
+            skus = values.map(sku => (sku[0].substring(0,4) + sku[0].substring(5,9) + sku[0].substring(10)).trim()).map(item => {
             
               for (var i = 0; i < data.length; i++)
               {
