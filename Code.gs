@@ -51,6 +51,35 @@ function onOpen(e)
 }
 
 /**
+ * Display the items that have a discount structure such that Lodge > Wholesale or Guide > Lodge or Guide > Wholesale.
+ * 
+ * @author Jarren Ralf
+ */
+function itemsWithNonLinearDiscounts()
+{
+  const spreadsheet = SpreadsheetApp.getActive();
+  const discountPercentagesSheet = spreadsheet.getSheetByName('Discount Percentages');
+  const discountPercentages = discountPercentagesSheet.getSheetValues(2, 11, discountPercentagesSheet.getLastRow() - 1, 5);
+  const lodge_GreaterThan_Wholesale = [], guide_GreaterThan_Lodge = [], guide_GreaterThan_Wholesale = [];
+
+  discountPercentages.map(item => {
+    if (item[3] > item[4])
+      lodge_GreaterThan_Wholesale.push(item)
+    else if (item[2] > item[3])
+      guide_GreaterThan_Lodge.push(item)
+    else if (item[2] > item[4])
+      guide_GreaterThan_Wholesale.push(item)
+  })
+
+  spreadsheet.getSheetByName('Lodge > Wholesale').clearContents()
+    .getRange(1, 1, lodge_GreaterThan_Wholesale.unshift(['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(lodge_GreaterThan_Wholesale)
+  spreadsheet.getSheetByName('Guide > Lodge')    .clearContents()
+    .getRange(1, 1, guide_GreaterThan_Lodge.unshift(    ['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(guide_GreaterThan_Lodge)
+  spreadsheet.getSheetByName('Guide > Wholesale').clearContents()
+    .getRange(1, 1, guide_GreaterThan_Wholesale.unshift(['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(guide_GreaterThan_Wholesale)
+}
+
+/**
  * This function takes the values that the user has just changed on the Discount Percentages page, specifically changes to the 3 discount structures that we use,
  * and it logs those changes on the Shopify Update sheet.
  * 
@@ -78,7 +107,7 @@ function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, s
 
   if (isItemSearchSheet)
   {
-    const removePriceColumns = u => [u[0], u[1], (Number(u[2]) < 1) ? u[2]*100 : u[2], (Number(u[4]) < 1) ? u[4]*100 : u[4], (Number(u[6]) < 1) ? u[6]*100 : u[6]];
+    const removePriceColumns = u => [u[0].split(' - ').pop().toString().toUpperCase(), '%', (Number(u[2]) < 1) ? u[2]*100 : u[2], (Number(u[4]) < 1) ? u[4]*100 : u[4], (Number(u[6]) < 1) ? u[6]*100 : u[6]];
 
     if (lastRow > 1)
     {
@@ -121,6 +150,8 @@ function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, s
   }
   else // Discount Percentages sheet
   {
+    const reformat = u => [u[0].split(' - ').pop().toString().toUpperCase(), '%', u[2], u[3], u[4]];
+
     if (lastRow > 1)
     {
       const recentlyUpdatedItems = shopifyUpdateSheet.getSheetValues(2, 1, lastRow - 1, 5)
@@ -134,7 +165,7 @@ function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, s
         if (idx !== -1)
           recentlyUpdatedItems[idx][col - 11] = values[0][0]; // This was the single change that was made by the user
         else
-          recentlyUpdatedItems.push(newItem)
+          recentlyUpdatedItems.push(newItem.map(reformat))
       }
       else if (numCols == 3 && col == 13)
       {
@@ -151,7 +182,7 @@ function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, s
               recentlyUpdatedItems[idx][4] = newItem[4];
             }
             else
-              recentlyUpdatedItems.push(newItem)
+              recentlyUpdatedItems.push(newItem.map(reformat))
           }
         })
       }
@@ -172,7 +203,7 @@ function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, s
               recentlyUpdatedItems[idx][colIdx_2] = newItem[colIdx_2];
             }
             else
-              recentlyUpdatedItems.push(newItem)
+              recentlyUpdatedItems.push(newItem.map(reformat))
           }
         })
       }
@@ -189,7 +220,7 @@ function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, s
             if (idx !== -1)
               recentlyUpdatedItems[idx][colIdx] = newItem[colIdx];
             else
-              recentlyUpdatedItems.push(newItem)
+              recentlyUpdatedItems.push(newItem.map(reformat))
           }
         })
       }
@@ -197,7 +228,7 @@ function addItemToShopifyUpdatePage(range, row, col, numRows, numCols, values, s
       shopifyUpdateSheet.getRange(2, 1, recentlyUpdatedItems.length, 5).setValues(recentlyUpdatedItems);
     }
     else // There are no other items currently on the list therefore add the recent change straight to the list
-      shopifyUpdateSheet.getRange(2, 1, numRows, 5).setValues(range.offset(0, 11 - col, numRows, 5).getValues())
+      shopifyUpdateSheet.getRange(2, 1, numRows, 5).setValues(range.offset(0, 11 - col, numRows, 5).getValues().map(reformat))
   }
 
   spreadsheet.toast('Update COMPLETED', 'Shopify Updated')
@@ -769,49 +800,6 @@ function searchV2(e, spreadsheet, sheet)
 }
 
 /**
- * This function sends Adrian the shopify update email. It takes all of the data that is on the Shopify Update page and it puts in the body of the email.
- * Once the email is sent the page is cleared and ready to collect new changes.
- * 
- * @author Jarren Ralf
- */
-function sendShopifyUpdateEmail()
-{
-  const shopifyUpdateSheet = SpreadsheetApp.getActive().getSheetByName('Shopify Update');
-  const lastRow = shopifyUpdateSheet.getLastRow();
-
-  if (lastRow > 1)
-  {
-    const range = shopifyUpdateSheet.getRange(2, 1, lastRow - 1, 5)
-    const itemValues = range.getValues();
-    const htmlOutput = HtmlService.createHtmlOutputFromFile('shopifyUpdateEmail')
-    const numItems = itemValues.length;
-    
-    for (var i = 0; i < numItems; i++)
-      htmlOutput.append(
-        '<tr style="height: 20px">' +
-        '<td class="s4" dir="ltr">' + itemValues[i][0] + '</td>' +
-        '<td class="s5" dir="ltr">$' + Number(itemValues[i][1]).toFixed(2) + '</td>' +
-        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][2]) ? '#ffffff">' + itemValues[i][2] + '</td>' : '#e06666">' + itemValues[i][2] + '</td>') +
-        '<td class="s6" dir="ltr" style="background-color:' + ((itemValues[i][3]) ? '#ffffff">' + itemValues[i][3] + '</td>' : '#e06666">' + itemValues[i][3] + '</td>') +
-        '<td class="s7" dir="ltr" style="background-color:' + ((itemValues[i][4]) ? '#ffffff">' + itemValues[i][4] + '</td>' : '#e06666">' + itemValues[i][4] + '</td></tr>')
-      )
-
-    htmlOutput.append('</tbody></table></div>')
-
-    MailApp.sendEmail({
-      to: "adrian@pacificnetandtwine.com", 
-      subject: "Shopify Requires an Update for it's Discount Percentages",
-      htmlBody: htmlOutput.getContent(),
-    });
-
-    range.clearContent();
-    Logger.log('Email sent!')
-  }
-  else
-    Logger.log('No email sent because there were no new prices changes.')
-}
-
-/**
  * This function creates the google description from the relevant information.
  * 
  * @author Jarren Ralf
@@ -862,7 +850,7 @@ function trigger_CreateAll()
   ScriptApp.newTrigger('installedOnEdit').forSpreadsheet(SpreadsheetApp.getActive()).onEdit().create()
   ScriptApp.newTrigger('updateAdagioDatabase').timeBased().everyDays(1).atHour(5).create()
   ScriptApp.newTrigger('updateAdagioBasePrice').timeBased().everyDays(1).atHour(6).create()
-  ScriptApp.newTrigger('sendShopifyUpdateEmail').timeBased().everyDays(1).atHour(15).create()
+  ScriptApp.newTrigger('updateDiscountsSheetOnPntShopifyUpdater').timeBased().everyDays(1).atHour(5).create()
 }
 
 /**
@@ -1017,6 +1005,62 @@ function updateAdagioDatabase()
     Logger.log('No Change for items:')
     discountDataSheet.getRange(2, 1, numItems_Initial, numCols).setNumberFormats(numberFormats).setValues(discountData)
   }
+}
+
+/**
+ * This function updates the Discounts sheet on the PNT Shopify Updater so that AJ is informed as to which items need to be updated on the website.
+ * 
+ * @author Jarren Ralf
+ */
+function updateDiscountsSheetOnPntShopifyUpdater()
+{
+  // Remove the items that are not on the website.
+  // Don't include items on sale
+  const shopifyUpdateSheet = SpreadsheetApp.getActive().getSheetByName('Shopify Update');
+  const lastRow = shopifyUpdateSheet.getLastRow();
+
+  if (lastRow > 1)
+  {
+    const pntShopifyUpdaterSS = SpreadsheetApp.openById('1sLhSt5xXPP5y9-9-K8kq4kMfmTuf6a9_l9Ohy0r82gI');
+    const fromWebsiteDiscountSheet = pntShopifyUpdaterSS.getSheetByName('FromWebsiteDiscount')
+    const fromShopifySheet = pntShopifyUpdaterSS.getSheetByName('FromShopify')
+    const numRows_FromShopify = fromShopifySheet.getLastRow() - 1;
+    const variantSkus = fromShopifySheet.getSheetValues(2, fromShopifySheet.getSheetValues(1, 1, 1, fromShopifySheet.getLastColumn())[0].indexOf('Variant SKU') + 1, numRows_FromShopify, 1); 
+    const fromWebsiteDiscounts = fromWebsiteDiscountSheet.getSheetValues(2, 1, fromWebsiteDiscountSheet.getLastRow() - 1, 6)
+    const range = shopifyUpdateSheet.getRange(2, 1, lastRow - 1, 5);
+    var idx_fromWebsiteDiscounts = -1, idx_fromShopify = -1;
+
+    const itemValues = range.getValues().filter(discountedItem => {
+
+      idx_fromWebsiteDiscounts = fromWebsiteDiscounts.findIndex(shopifyItem => shopifyItem[1] == discountedItem[0])
+      
+      if (idx_fromWebsiteDiscounts !== -1) // Found the item in the from Website Discount list
+        return (discountedItem[2] != fromWebsiteDiscounts[idx_fromWebsiteDiscounts][3] || // Guide
+                discountedItem[3] != fromWebsiteDiscounts[idx_fromWebsiteDiscounts][4] || // Lodge
+                discountedItem[4] != fromWebsiteDiscounts[idx_fromWebsiteDiscounts][5]) ? // Wholesale
+                true : false; 
+      else
+      {
+        idx_fromShopify = variantSkus.findIndex(shopifyItem => shopifyItem[0] == discountedItem[0])
+
+        return (idx_fromShopify !== -1) ? true : false // // Found the item in the from Shopify list
+      }
+    });
+
+    const numNewDiscounts = itemValues.length;
+    
+    if (numNewDiscounts !== 0)
+    {
+      const masterSkus = fromShopifySheet.getSheetValues(2, 1, numRows_FromShopify, 1); 
+      const newDiscounts = itemValues.map(item => {item.unshift(masterSkus[variantSkus.findIndex(sku => sku[0] == item[0])][0]); return item}); // Add the master sku to the front
+      pntShopifyUpdaterSS.getSheetByName('Discounts').clearContents().getRange(1, 1, newDiscounts.unshift(['Handle', 'SKU', 'Price Type', 'Guide', 'Lodge', 'Wholesale']), 6).setNumberFormat('@').setValues(newDiscounts);
+      Logger.log('New discount changes have been written to the Discounts sheet on the PNT Shopify Updater');
+    }
+
+    range.clearContent();
+  }
+  else
+    Logger.log('No new discount changes.')
 }
 
 /**
