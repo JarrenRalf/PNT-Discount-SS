@@ -320,14 +320,14 @@ function deleteItemsThatNoLongerExist()
       return true
     else
     {
-      deletedItems.push(discountItem);
+      //deletedItems.push(discountItem);
       return false
     }
   })
 
-  spreadsheet.getSheetByName('Deleted Items').getRange(1, 1, deletedItems.length, deletedItems[0].length).setNumberFormat('@').setValues(deletedItems);
-  const numRows = discountPercentagesValues.unshift(deletedItems[0])
-  discountPercentagesRange.clearContent().offset(0, 0, numRows, discountPercentagesValues[0].length).setNumberFormat('@').setValues(discountPercentagesValues)
+  //spreadsheet.getSheetByName('Deleted Items').getRange(1, 1, deletedItems.length, deletedItems[0].length).setNumberFormat('@').setValues(deletedItems);
+  //const numRows = discountPercentagesValues.unshift(deletedItems[0])
+  discountPercentagesRange.clearContent().offset(1, 0, discountPercentagesValues.length, discountPercentagesValues[0].length).setNumberFormat('@').setValues(discountPercentagesValues)
 }
 
 /**
