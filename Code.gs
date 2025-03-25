@@ -51,35 +51,6 @@ function onOpen(e)
 }
 
 /**
- * Display the items that have a discount structure such that Lodge > Wholesale or Guide > Lodge or Guide > Wholesale.
- * 
- * @author Jarren Ralf
- */
-function itemsWithNonLinearDiscounts()
-{
-  const spreadsheet = SpreadsheetApp.getActive();
-  const discountPercentagesSheet = spreadsheet.getSheetByName('Discount Percentages');
-  const discountPercentages = discountPercentagesSheet.getSheetValues(2, 11, discountPercentagesSheet.getLastRow() - 1, 5);
-  const lodge_GreaterThan_Wholesale = [], guide_GreaterThan_Lodge = [], guide_GreaterThan_Wholesale = [];
-
-  discountPercentages.map(item => {
-    if (item[3] > item[4])
-      lodge_GreaterThan_Wholesale.push(item)
-    else if (item[2] > item[3])
-      guide_GreaterThan_Lodge.push(item)
-    else if (item[2] > item[4])
-      guide_GreaterThan_Wholesale.push(item)
-  })
-
-  spreadsheet.getSheetByName('Lodge > Wholesale').clearContents()
-    .getRange(1, 1, lodge_GreaterThan_Wholesale.unshift(['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(lodge_GreaterThan_Wholesale)
-  spreadsheet.getSheetByName('Guide > Lodge')    .clearContents()
-    .getRange(1, 1, guide_GreaterThan_Lodge.unshift(    ['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(guide_GreaterThan_Lodge)
-  spreadsheet.getSheetByName('Guide > Wholesale').clearContents()
-    .getRange(1, 1, guide_GreaterThan_Wholesale.unshift(['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(guide_GreaterThan_Wholesale)
-}
-
-/**
  * This function takes the values that the user has just changed on the Discount Percentages page, specifically changes to the 3 discount structures that we use,
  * and it logs those changes on the Shopify Update sheet.
  * 
@@ -330,6 +301,36 @@ function changeDiscountStructure(e, spreadsheet, sheet)
 }
 
 /**
+ * This function checks the Discount Percentages sheet and it removes all of the skus that no longer exist since our item purge of Agaio and Access this year, 2025.
+ * 
+ * @author Jarren Ralf
+ */
+function deleteItemsThatNoLongerExist()
+{
+  var sku;
+  const deletedItems = [];
+  const spreadsheet = SpreadsheetApp.getActive();
+  const csvData = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
+  const discountPercentagesRange = spreadsheet.getSheetByName('Discount Percentages').getDataRange();
+  const discountPercentagesValues = discountPercentagesRange.getValues().filter(discountItem => {
+
+    sku = discountItem[10].split(' - ').pop().toString().trim().toUpperCase()
+
+    if (Number(csvData.findIndex(csvItem => csvItem[1].split(' - ').pop().toString().trim().toUpperCase() === sku) + 1))
+      return true
+    else
+    {
+      deletedItems.push(discountItem);
+      return false
+    }
+  })
+
+  spreadsheet.getSheetByName('Deleted Items').getRange(1, 1, deletedItems.length, deletedItems[0].length).setNumberFormat('@').setValues(deletedItems);
+  const numRows = discountPercentagesValues.unshift(deletedItems[0])
+  discountPercentagesRange.clearContent().offset(0, 0, numRows, discountPercentagesValues[0].length).setNumberFormat('@').setValues(discountPercentagesValues)
+}
+
+/**
  * This function checks if every value in the import multi-array is blank, which means that the user has
  * highlighted and deleted all of the data.
  * 
@@ -351,6 +352,35 @@ function isEveryValueBlank(values)
 function isNotBlank(str)
 {
   return str !== ''
+}
+
+/**
+ * Display the items that have a discount structure such that Lodge > Wholesale or Guide > Lodge or Guide > Wholesale.
+ * 
+ * @author Jarren Ralf
+ */
+function itemsWithNonLinearDiscounts()
+{
+  const spreadsheet = SpreadsheetApp.getActive();
+  const discountPercentagesSheet = spreadsheet.getSheetByName('Discount Percentages');
+  const discountPercentages = discountPercentagesSheet.getSheetValues(2, 11, discountPercentagesSheet.getLastRow() - 1, 5);
+  const lodge_GreaterThan_Wholesale = [], guide_GreaterThan_Lodge = [], guide_GreaterThan_Wholesale = [];
+
+  discountPercentages.map(item => {
+    if (item[3] > item[4])
+      lodge_GreaterThan_Wholesale.push(item)
+    else if (item[2] > item[3])
+      guide_GreaterThan_Lodge.push(item)
+    else if (item[2] > item[4])
+      guide_GreaterThan_Wholesale.push(item)
+  })
+
+  spreadsheet.getSheetByName('Lodge > Wholesale').clearContents()
+    .getRange(1, 1, lodge_GreaterThan_Wholesale.unshift(['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(lodge_GreaterThan_Wholesale)
+  spreadsheet.getSheetByName('Guide > Lodge')    .clearContents()
+    .getRange(1, 1, guide_GreaterThan_Lodge.unshift(    ['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(guide_GreaterThan_Lodge)
+  spreadsheet.getSheetByName('Guide > Wholesale').clearContents()
+    .getRange(1, 1, guide_GreaterThan_Wholesale.unshift(['Google Description',	'Base Price',	'Guide', 'Lodge',	'Wholesale']), 5).setValues(guide_GreaterThan_Wholesale)
 }
 
 /**
