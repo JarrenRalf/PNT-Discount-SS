@@ -234,7 +234,7 @@ function changeDiscountStructure(e, spreadsheet, sheet)
       else if (isEveryValueBlank(values)) // Every value is blank, therefore this is the user clicking delete
       {
         range.offset(0, 13 - col, numRows, 3).setValue('').offset(0, -8, numRows, 1).setValue(new Date().toDateString());
-        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
+        // addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
       }
       else if (values.some(vals => vals.some(num => isNaN(Number(num))))) // Atleast one of the entries contains a letter
       {
@@ -244,7 +244,7 @@ function changeDiscountStructure(e, spreadsheet, sheet)
       else // Assumed to be a user make an edit to a multiple rows and 1 or more columns
       {
         range.offset(0, 5 - col, numRows, 1).setValue(new Date().toDateString());
-        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
+        // addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
       }
     }
     else if (numCols > 1) // Multiple columns were changed in 1 row
@@ -258,7 +258,7 @@ function changeDiscountStructure(e, spreadsheet, sheet)
       {
         range.offset(0, 13 - col, 1, 3).setValues([['', '', '']]).offset(0, -8, 1, 1).setValue(new Date().toDateString());
         SpreadsheetApp.flush();
-        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
+        // addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
       }
         
       else if (values[0].some(num => isNaN(Number(num)))) // Atleast one of the entries contains a letter
@@ -269,7 +269,7 @@ function changeDiscountStructure(e, spreadsheet, sheet)
       else // Assumed to be a user make an edit to a single row but multiple columns
       {
         range.offset(0, 5 - col, 1, 1).setValue(new Date().toDateString());
-        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
+        // addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, false)
       }
     }
     else // One cell is being changed given only 1 range in the range list
@@ -286,7 +286,7 @@ function changeDiscountStructure(e, spreadsheet, sheet)
         else
         {
           range.offset(0, 5 - col, 1, 1).setValue(new Date().toDateString());
-          addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, true)
+          // addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, true)
         }
       }
       else if (oldValue == 0) // It appears that the user has pressed delete over a value of zero, meaning that 0 is the chosen discount
@@ -294,7 +294,7 @@ function changeDiscountStructure(e, spreadsheet, sheet)
         range.offset(0, 13 - col, 1, 3).setValues([['', '', '']]).offset(0, -8, 1, 1).setValue(new Date().toDateString());
         spreadsheet.toast('0% Discount: Confirmed');
         SpreadsheetApp.flush()
-        addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, true)
+        // addItemToShopifyUpdatePage(range, range.rowStart, col, numRows, numCols, values, spreadsheet, sheet, true)
       }
     }
   }
@@ -723,7 +723,7 @@ function searchV2(e, spreadsheet, sheet)
           }
 
           SpreadsheetApp.flush()
-          addItemToShopifyUpdatePage(range, row, col, numRows, colEnd - col + 1, '', spreadsheet, sheet, false, true)
+          // addItemToShopifyUpdatePage(range, row, col, numRows, colEnd - col + 1, '', spreadsheet, sheet, false, true)
           spreadsheet.toast('', 'Discounts Updated.')
         }
         else if (!e.oldValue) // If e.oldValue is undefined then the user used the drag function to change 1 item
@@ -741,7 +741,7 @@ function searchV2(e, spreadsheet, sheet)
               case 8:
                 var newPercentage = range.getValue();
                 discountDataSheet.getRange(itemIndex + 2, col/2 + 11).setNumberFormat('@').setValue(newPercentage*100);
-                addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
+                // addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
                 range.offset(0, 0, 1, 2).setNumberFormats([['#%', '$0.00']]).setValues([[newPercentage, Number(range.offset(0, 3 - col).getValue())*(1 - newPercentage)]])
                 break;
               case 5: // Price Changed
@@ -750,7 +750,7 @@ function searchV2(e, spreadsheet, sheet)
                 const newPrice = range.getValue();
                 var newPercentage = 1 - Number(newPrice)/Number(range.offset(0, 3 - col).getValue())
                 discountDataSheet.getRange(itemIndex + 2, col/2 + 10.5).setNumberFormat('@').setValue(newPercentage*100);
-                addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
+                // addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
                 range.offset(0, -1, 1, 2).setNumberFormats([['#%', '$0.00']]).setValues([[newPercentage, newPrice]])
                 break;
             }
@@ -779,7 +779,7 @@ function searchV2(e, spreadsheet, sheet)
               case 8:
                 var newPercentage = range.getValue();
                 discountDataSheet.getRange(itemIndex + 2, col/2 + 11).setNumberFormat('@').setValue(newPercentage*100);
-                addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
+                // addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
                 range.offset(0, 0, 1, 2).setNumberFormats([['#%', '$0.00']]).setValues([[newPercentage, Number(range.offset(0, 3 - col).getValue())*(1 - newPercentage)]])
                 break;
               case 5: // Price Changed
@@ -788,7 +788,7 @@ function searchV2(e, spreadsheet, sheet)
                 const newPrice = range.getValue();
                 var newPercentage = 1 - Number(newPrice)/Number(range.offset(0, 3 - col).getValue())
                 discountDataSheet.getRange(itemIndex + 2, col/2 + 10.5).setNumberFormat('@').setValue(newPercentage*100);
-                addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
+                // addItemToShopifyUpdatePage(range, row, col, 1, colEnd - col + 1, Number(newPercentage)*100, spreadsheet, sheet, true, true)
                 range.offset(0, -1, 1, 2).setNumberFormats([['#%', '$0.00']]).setValues([[newPercentage, newPrice]])
                 break;
             }
