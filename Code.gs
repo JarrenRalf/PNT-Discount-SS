@@ -908,7 +908,7 @@ function updateAdagioBasePrice()
   const discountData = discountDataRange.getValues()
   const ss = SpreadsheetApp.openById('1sLhSt5xXPP5y9-9-K8kq4kMfmTuf6a9_l9Ohy0r82gI');
   const adagioDataSheet = ss.getSheetByName('FromAdagio');
-  const lastUpdated = ss.getSheetByName('Dashboard').getSheetValues(24, 11, 1, 1)[0][0]
+  const lastUpdated = ss.getSheetByName('Dashboard').getSheetValues(10, 7, 1, 1)[0][0]
   const adagioData = adagioDataSheet.getSheetValues(2, 17, adagioDataSheet.getLastRow() - 1, 2);
 
   for (var j = 0; j < discountData.length; j++)
@@ -933,12 +933,11 @@ function updateAdagioBasePrice()
     }
   }
 
-  const numberFormats = new Array(numRows).fill(['@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '0', '0', '0', '0'])
-  discountDataRange.setNumberFormats(numberFormats).setValues(discountData)
-  const text = 'The prices in this spreadsheet were last updated at ' + Utilities.formatDate(lastUpdated, spreadsheet.getSpreadsheetTimeZone(), 'h:mm a   dd MMM yyyy');
+  discountDataRange.setNumberFormats(new Array(numRows).fill(['@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '0', '0', '0', '0'])).setValues(discountData)
+  const text = 'Prices were last updated from Shopify Updater at ' + Utilities.formatDate(lastUpdated, spreadsheet.getSpreadsheetTimeZone(), 'h:mm a   dd MMM yyyy');
   const richTextValue = SpreadsheetApp.newRichTextValue().setText(text)
-    .setTextStyle(0, 52, SpreadsheetApp.newTextStyle().setFontSize(18).setBold(false).build())
-    .setTextStyle(52, text.length, SpreadsheetApp.newTextStyle().setFontSize(18).setBold(true).build()).build()
+    .setTextStyle(0, 49, SpreadsheetApp.newTextStyle().setFontSize(18).setBold(false).build())
+    .setTextStyle(49, text.length, SpreadsheetApp.newTextStyle().setFontSize(18).setBold(true).build()).build()
   spreadsheet.getSheetByName('Item Search').getRange(2, 2).setRichTextValue(richTextValue).activate()
   spreadsheet.toast('Price update complete.')
 }
