@@ -43,7 +43,6 @@ function onOpen(e)
     .addToUi();
 
   spreadsheet.getSheetByName('Item Search').getRange(1, 3).uncheck();
-  spreadsheet.getSheetByName('Shopify Update').hideSheet();
 
   const filter = spreadsheet.getSheetByName('Discount Percentages').getFilter();
   filter.setColumnFilterCriteria( 5, SpreadsheetApp.newFilterCriteria().whenCellEmpty().build())
