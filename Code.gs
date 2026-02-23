@@ -354,6 +354,36 @@ function isNotBlank(str)
 }
 
 /**
+ * This function returns true if the presented number is a UPC-A, false otherwise.
+ * 
+ * @param {Number} upcNumber : The UPC-A number
+ * @returns Whether the given value is a UPC-A or not
+ * @author Jarren Ralf
+ */
+function isUPC_A(upcNumber)
+{
+  for (var i = 0, sum = 0, upc = upcNumber.toString(); i < upc.length - 1; i++)
+    sum += (i % 2 === 0) ? Number(upc[i])*3 : Number(upc[i]);
+
+  return upc.endsWith(Math.ceil(sum/10)*10 - sum) && upc.length === 12;
+}
+
+/**
+ * This function returns true if the presented number is a EAN_13, false otherwise.
+ * 
+ * @param {Number} upcNumber : The EAN_13 number
+ * @returns Whether the given value is a EAN_13 or not
+ * @author Jarren Ralf
+ */
+function isEAN_13(upcNumber)
+{
+  for (var i = 0, sum = 0, upc = upcNumber.toString(); i < upc.length - 1; i++)
+    sum += (i % 2 === 0) ? Number(upc[i]) : Number(upc[i])*3;
+
+  return upc.endsWith(Math.ceil(sum/10)*10 - sum) && upc.length === 13;
+}
+
+/**
  * Display the items that have a discount structure such that Lodge > Wholesale or Guide > Lodge or Guide > Wholesale.
  * 
  * @author Jarren Ralf
@@ -439,13 +469,24 @@ function searchV2(e, spreadsheet, sheet)
         {
           spreadsheet.toast('Searching...')
           const inventorySheet = spreadsheet.getSheetByName('Discount Percentages');
-          const data = inventorySheet.getSheetValues(2, 10, inventorySheet.getLastRow() - 1, 6)
+          const numRows = inventorySheet.getLastRow() - 1;
+          const data = inventorySheet.getSheetValues(2, 10, numRows, 6)
             .map(d => [d[0], d[1], d[2], Number(d[3])/100, (d[2]*(100 - d[3])/100).toFixed(2), Number(d[4])/100, (d[2]*(100 - d[4])/100).toFixed(2), Number(d[5])/100, (d[2]*(100 - d[5])/100).toFixed(2)]);
           const numSearches = searches.length; // The number searches
           var numSearchWords;
 
           if (searchesOrNot.length === 1) // The word 'not' WASN'T found in the string
           {
+            const upcLength = searches[0][0].length;
+
+            if (/^\d+$/.test(searches[0][0]) && ((isUPC_A(searches[0][0]) && upcLength === 12) || (isEAN_13(searches[0][0]) && upcLength === 13)) 
+                && numSearches === 1 && searches[0].length == 1) // Check if a barcode was scanned in the cell
+            {
+              const itemIdx = inventorySheet.getSheetValues(2, inventorySheet.getLastColumn(), numRows, 1).findIndex(upcCode => upcCode[0].includes(searches[0][0]));
+
+              if (itemIdx !== -1)
+                output.push(data[itemIdx]);
+            }
             for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
             {
               loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
@@ -951,13 +992,17 @@ function updateAdagioDatabase()
   const spreadsheet = SpreadsheetApp.getActive();
   const discountDataSheet = spreadsheet.getSheetByName('Discount Percentages');
   const numItems_Initial = discountDataSheet.getLastRow() - 1;
-  const numCols = 17;
+  const numCols = 18;
   const discountData = discountDataSheet.getSheetValues(2, 1, numItems_Initial, numCols)
   const csvData = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
-  const header = csvData.shift(); // Remove the header
-  const sku = header.indexOf('Item #')
-  const uom = header.indexOf('Price Unit')
-  const description = header.indexOf('Item List')
+  const upcData = Utilities.parseCsv(DriveApp.getFilesByName("BarcodeInput.csv").next().getBlob().getDataAsString());
+  const csvHeader = csvData.shift(); // Remove the header
+  const upcHeader = upcData.shift(); // Remove the header
+  const sku_Csv = csvHeader.indexOf('Item #')
+  const sku_Upc = upcHeader.indexOf('Item #')
+  const uom_Csv = csvHeader.indexOf('Price Unit')
+  const description_Csv = csvHeader.indexOf('Item List')
+  const upc = upcHeader.indexOf('UPC Code')
 
   const numItems_CSV = csvData.length;
   var googleDescription, vendor, category, fullDescription;
@@ -966,21 +1011,24 @@ function updateAdagioDatabase()
   {
     for (var j = 0; j < numItems_Initial; j++)
     {
-      if (discountData[j][0].toString().toUpperCase().trim() == csvData[i][sku].toString().toUpperCase().trim()) // SKU
+      if (discountData[j][0].toString().toUpperCase().trim() == csvData[i][sku_Csv].toString().toUpperCase().trim()) // SKU
       {
-        googleDescription = csvData[i][description].split(' - ');
+        googleDescription = csvData[i][description_Csv].split(' - ');
         googleDescription.pop() // Remove the sku
         googleDescription.pop() // Remove the unit of measure
         category = googleDescription.pop();
         vendor = googleDescription.pop();
         fullDescription = googleDescription.join(' - ');
+        upcCodes = upcData.filter(upcCode => upcCode[sku_Upc].toString().toUpperCase() === discountData[j][0].toString().toUpperCase().trim()).map(upcCode => upcCode[upc]);
 
         discountData[j][ 1] = vendor;
         discountData[j][ 2] = fullDescription;
-        discountData[j][ 3] = csvData[i][uom].toString().toUpperCase();
+        discountData[j][ 3] = csvData[i][uom_Csv].toString().toUpperCase();
         discountData[j][ 8] = category;
-        discountData[j][ 9] = csvData[i][uom].toString().toUpperCase();
-        discountData[j][10] = csvData[i][description];
+        discountData[j][ 9] = csvData[i][uom_Csv].toString().toUpperCase();
+        discountData[j][10] = csvData[i][description_Csv];
+        discountData[j][17] = (upcCodes.length > 0) ? upcCodes.join(',') : ''
+        
         break;
       }
     }  
@@ -993,31 +1041,33 @@ function updateAdagioDatabase()
       category = googleDescription.pop();
       vendor = googleDescription.pop();
       fullDescription = googleDescription.join(' - ');
+      upcCodes = upcData.filter(upcCode => upcCode[sku_Upc].toString().toUpperCase() === csvData[i][sku_Csv].toString().toUpperCase().trim()).map(upcCode => upcCode[upc]);
 
       discountData.push([
-        csvData[i][sku], // SKU
+        csvData[i][sku_Csv], // SKU
         vendor, // Vendor 1 Name
         fullDescription, // Description
-        csvData[i][uom], // Unit
+        csvData[i][uom_Csv], // Unit
         '', // Category Code
         0, // Base Price
         '', // Comments 1
         '', // Comments 2
         category, // Comments 3
-        csvData[i][uom], // Unit
-        csvData[i][description], // Google Description
+        csvData[i][uom_Csv], // Unit
+        csvData[i][description_Csv], // Google Description
         0, // Base Price
         0, // Discount 1 (Guide)
         0, // Discount 2 (Lodge)
         0, // Discount 3 (Wholesale)
         0, // Discount 4 
-        0  // Discount 5
+        0, // Discount 5
+        (upcCodes.length > 0) ? upcCodes.join(',') : '' // UPC
       ])
     }
   }
 
   const numItems_Final = discountData.length;
-  const numberFormats = [...Array(numItems_Final)].map(e => ['@', '@', '@', '@', '@', '0', '@', '@', '@', '@', '@', '0', '0', '0', '0', '0', '0']); // Currency format
+  const numberFormats = [...Array(numItems_Final)].map(e => ['@', '@', '@', '@', '@', '0', '@', '@', '@', '@', '@', '0', '0', '0', '0', '0', '0', '@']); // Currency format
 
   Logger.log('numItems_Final: ' + numItems_Final)
   Logger.log('numItems_InitialL: ' + numItems_Initial)
@@ -1030,7 +1080,7 @@ function updateAdagioDatabase()
   }
   else if (numItems_Final === numItems_Initial)
   {
-    Logger.log('No Change for items:')
+    Logger.log('No Change for items')
     discountDataSheet.getRange(2, 1, numItems_Initial, numCols).setNumberFormats(numberFormats).setValues(discountData)
   }
 }
