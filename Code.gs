@@ -686,7 +686,7 @@ function searchV2(e, spreadsheet, sheet)
                 .setBorder(false, null, false, null, false, false).setNumberFormats(numberFormats_ItemSearch).setFontWeights(fontWeights).setValues(skus).activate()
           }
 
-          (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
+          sheet.getRange(1, 1, 1, 2).setValues([[numItems + " results found.", '']])
           spreadsheet.toast('Searching Complete.')
           functionRunTimeRange.setValue((new Date().getTime() - startTime)/1000 + " seconds");
         }
@@ -696,7 +696,7 @@ function searchV2(e, spreadsheet, sheet)
           itemSearchFullRange.clearContent(); // Clear content
           const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
           const message = SpreadsheetApp.newRichTextValue().setText("No results found.\nPlease try again.").setTextStyle(0, 16, textStyle).build();
-          searchResultsDisplayRange.setRichTextValue(message);
+          searchResultsDisplayRange.setRichTextValue(message).offset(0, 1).setValue('');
         }
       }
     }
