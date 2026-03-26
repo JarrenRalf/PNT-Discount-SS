@@ -38,6 +38,8 @@ function onOpen(e)
   const spreadsheet = e.source;
 
   SpreadsheetApp.getUi().createMenu('PNT Controls')
+    .addItem('Build SKU List', 'showSkuListSidebar')
+    .addSeparator()
     .addItem('Update Price', 'updateAdagioBasePrice')
     .addItem('Update Items (from inventory.csv)', 'updateAdagioDatabase')
     .addToUi();
@@ -300,6 +302,16 @@ function changeDiscountStructure(e, spreadsheet, sheet)
 }
 
 /**
+ * This function clears the PropertiesService that stores the list of SKUs that the user is building.
+ * 
+ * @author chatGPT
+ */
+function clearSkuList()
+{
+  PropertiesService.getUserProperties().deleteProperty('SKU_LIST');
+}
+
+/**
  * This function checks the Discount Percentages sheet and it removes all of the skus that no longer exist since our item purge of Agaio and Access this year, 2025.
  * 
  * @author Jarren Ralf
@@ -327,6 +339,121 @@ function deleteItemsThatNoLongerExist()
   //spreadsheet.getSheetByName('Deleted Items').getRange(1, 1, deletedItems.length, deletedItems[0].length).setNumberFormat('@').setValues(deletedItems);
   //const numRows = discountPercentagesValues.unshift(deletedItems[0])
   discountPercentagesRange.clearContent().offset(1, 0, discountPercentagesValues.length, discountPercentagesValues[0].length).setNumberFormat('@').setValues(discountPercentagesValues)
+}
+
+/**
+ * This function gets the html code that is used to build the side bar based on the user's selected items.
+ * 
+ * @param {String[]} skus : The list of SKUs that the user has built up for or already in the side bar.
+ * @author chatGPT
+ */
+function getHtml(skus)
+{
+  var rowsHtml = skus.map(function(s)
+  {
+    return '<div class="row"><div class="sku">' + s + '</div></div>';
+  }).join('');
+
+  return '<html><head><style>' +
+    'body{font-family:Arial,sans-serif;margin:0;padding:8px;}' +
+    '.topbar{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;margin-bottom:6px;}' +
+    '.btn{padding:6px 10px;cursor:pointer;border:1px solid black;background:#eee;}' +
+    '.btn-left{text-align:left;}' +
+    '.btn-center{text-align:center;}' +
+    '.btn-right{text-align:right;}' +
+    '.container{user-select:text;}' +
+    '.row{border:1px solid black;padding:4px 6px;}' +
+    '.sku{user-select:text;}' +
+  '</style></head><body>' +
+
+  '<div class="topbar">' +
+    '<div class="btn-left"><button class="btn" onclick="addMore()">Add</button></div>' +
+    '<div class="btn-center"><button class="btn" onclick="getPricing()">Get Pricing</button></div>' +
+    '<div class="btn-right"><button class="btn" onclick="clearAll()">Clear</button></div>' +
+  '</div>' +
+
+  '<div class="container" id="list">' + rowsHtml + '</div>' +
+
+  '<script>' +
+    'function addMore(){ google.script.run.showSkuListSidebar(); }' +
+    'function clearAll(){ google.script.run.withSuccessHandler(function(){ document.getElementById("list").innerHTML=""; }).clearSkuList(); }' +
+    'function getPricing(){ var list=[]; document.querySelectorAll(".sku").forEach(function(el){list.push(el.textContent);}); google.script.run.getPricingFromSidebar(list); }' +
+  '</script>' +
+
+  '</body></html>';
+}
+
+/**
+ * This function takes the sku list that was generated in the side bar and finds the discounts for those items
+ * and displays the output on the item search sheet.
+ * 
+ * @param {String[]} skuList : The list of SKUs that the user has built up in the side bar.
+ * @author chatGPT
+ */
+function getPricingFromSidebar(skuList)
+{
+  const spreadsheet = SpreadsheetApp.getActive();
+  const sheet = spreadsheet.getSheetByName('Item Search');
+  const inventorySheet = spreadsheet.getSheetByName('Discount Percentages');
+  const data = inventorySheet.getSheetValues(2, 10, inventorySheet.getLastRow() - 1, 6)
+    .map(d => [d[0], d[1], d[2], d[3]/100, (d[2]*(100 - d[3])/100), d[4]/100, (d[2]*(100 - d[4])/100), d[5]/100, (d[2]*(100 - d[5])/100)]);
+  const numItems = skuList.length;
+
+  sheet.getRange(4, 1, sheet.getLastRow() - 3, 9).clearContent().setBackground('white').setFontColor('black').setBorder(true,true,false,true,false,false)
+    .offset(0, 0, numItems, 9)
+      .setFontFamily('Arial').setFontWeight('bold').setFontSize(12)
+      .setHorizontalAlignments(new Array(numItems).fill(['center','left','right','right','right','right','right','right','right']))
+      .setBorder(false,null,false,null,false,false)
+      .setNumberFormats([...Array(numItems)].map(() => ['@','@','$0.00','#%','$0.00','#%','$0.00','#%','$0.00']))
+      .setFontWeights([...Array(numItems)].map(() => ['bold','bold','bold','normal','bold','normal','bold','normal','bold']))
+      .setValues(
+        skuList.map(item =>
+        {
+          for (var i = 0; i < data.length; i++)
+            if (data[i][1].toString().split(' - ').pop().toUpperCase() == item)
+              return data[i];
+        }))
+    .offset(-3, 0, 1, 2).setValues([[numItems + ' results found.','']])
+    .offset(3, 0, numItems, 9).activate()
+
+  spreadsheet.toast('Searching Complete.');
+}
+
+/**
+ * This function gets SKUs selected based on the active range list of the user.
+ * 
+ * @returns The selected SKU numbers
+ * @author chatGPT
+ */
+function getSelectedSKUs()
+{
+  try
+  {
+    var firstRows = [], lastRows = [], skus = []; 
+    const sheet = SpreadsheetApp.getActiveSheet();
+
+    sheet.getActiveRangeList().getRanges().map((rng, r) => 
+    {
+      firstRows.push(rng.getRow());
+      lastRows.push(rng.getLastRow());
+      skus.push(...sheet.getSheetValues(firstRows[r], 2, lastRows[r] - firstRows[r] + 1, 1).map(item => item[0].split(' - ').pop().toString().trim().toUpperCase()))
+    });
+
+    if (Math.min(...firstRows) > 3 && Math.max(...lastRows) <= sheet.getLastRow())
+    {
+      return skus;
+    }
+    else
+    {
+      SpreadsheetApp.getUi().alert('Please select an item from the list.');
+      return null;
+    }
+  }
+  catch (e)
+  {
+    SpreadsheetApp.getUi().alert('Invalid selection.');
+    return null;
+  }
 }
 
 /**
@@ -884,6 +1011,28 @@ function setGoogleDescription()
 }
 
 /**
+ * This function launches an html side bar allowing the user to build a list of SKUs that they want pricing for.
+ * 
+ * @author chatGPT
+ */
+function showSkuListSidebar()
+{
+  const skus = getSelectedSKUs();
+  if (!skus) return;
+
+  const props = PropertiesService.getUserProperties();
+  const merged = [...JSON.parse(props.getProperty('SKU_LIST') || '[]')];
+
+  skus.forEach(s =>
+  {
+    if (s) merged.push(s);
+  });
+
+  props.setProperty('SKU_LIST', JSON.stringify(merged));
+  SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutput(getHtml(merged)).setTitle('SKU List'));
+}
+
+/**
  * This function sorts the data by the vendor name.
  * 
  * @author Jarren Ralf
@@ -1083,6 +1232,8 @@ function updateAdagioDatabase()
     Logger.log('No Change for items')
     discountDataSheet.getRange(2, 1, numItems_Initial, numCols).setNumberFormats(numberFormats).setValues(discountData)
   }
+
+  clearSkuList() // If a user has built a SKU list, clear it
 }
 
 /**
