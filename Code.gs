@@ -853,7 +853,21 @@ function searchV2(e, spreadsheet, sheet)
                               d[4]/100, (d[2]*(100 - d[4])/100).toFixed(2), 
                               d[5]/100, (d[2]*(100 - d[5])/100).toFixed(2)]))
               .offset(1 - row, 0, 2, 1).setValues([["1 result found."], [(new Date().getTime() - startTime)/1000 + " seconds"]])
-              .offset(row - 1, 0, 1, 9).activate()
+
+            spreadsheet.toast('Searching Complete.')
+          }
+          else
+          {
+            range.offset(0, 0, 1, 9).setBackground('#ffe599').setFontColor('black').setFontFamily('Arial').setFontWeight('bold').setFontSize(12)
+                .setHorizontalAlignments([['center', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right']])
+                .setFontWeights([['bold', 'bold', 'bold', 'normal', 'bold', 'normal', 'bold', 'normal', 'bold']])
+                .setNumberFormats([['@', '@', '$0.00', '#%', '$0.00', '#%', '$0.00', '#%', '$0.00']])
+                .setBorder(false, null, false, null, false, false)
+                .setValues([['SKU Not Found:', itemNumber, '', '', '', '', '', '', '']])
+              .offset(1 - row, 0, 1, 1).setRichTextValue(
+                SpreadsheetApp.newRichTextValue().setText("No results found.\nPlease try again.")
+                  .setTextStyle(0, 16, SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build()).build())
+              .offset(1, 0, 1, 1).setValue((new Date().getTime() - startTime)/1000 + " seconds")
 
             spreadsheet.toast('Searching Complete.')
           }
